@@ -5,5 +5,4 @@
 # typed: false
 
 module ActiveJob::Continuation::Step; end
-module ActiveJob::Exceptions::JITTER_DEFAULT; end
 module GlobalID::Identification::SignedGlobalID; end
