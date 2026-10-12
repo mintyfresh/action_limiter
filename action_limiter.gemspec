@@ -8,6 +8,7 @@ Gem::Specification.new do |spec|
   spec.version     = ActionLimiter::VERSION
   spec.authors     = ['Minty Fresh']
   spec.email       = ['7896757+mintyfresh@users.noreply.github.com']
+  spec.license     = 'MIT'
   spec.summary     = 'Redis-backed rate limiters for concurrent, windowed, bucketed, and points-based use cases.'
   spec.description = 'Redis-backed rate limiters supporting concurrent (semaphore), sliding-window, ' \
                      'multi-key sliding-window, fixed-interval bucket, and points-based strategies.'
@@ -16,7 +17,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata['rubygems_mfa_required'] = 'true'
 
-  spec.files         = Dir.glob(['lib/**/*.rb', 'lib/**/*.lua', 'README.md'], base: __dir__)
+  spec.files         = Dir.glob(['lib/**/*.rb', 'lib/**/*.lua', 'README.md', 'LICENSE'], base: __dir__)
   spec.require_paths = ['lib']
 
   spec.add_dependency 'activesupport', '>= 8'
