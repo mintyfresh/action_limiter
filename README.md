@@ -96,6 +96,41 @@ limiter = current_user.admin? ? ActionLimiter::Unlimited.new : ERP
 It never touches Redis, accepts any `within_limit` options, and yields a handle that responds to
 `renew`, `points_used`, and `held?`.
 
+## ActionController
+
+```ruby
+class MessagesController < ApplicationController
+  include ActionLimiter::ActionController::RateLimits
+
+  SEARCH_LIMIT = ActionLimiter::Bucket.new('search', limit: 100, interval: 1.second)
+
+  rate_limit only: :create do
+    ActionLimiter::Window.new("messages:#{current_user.id}", limit: 20, duration: 1.minute)
+  end
+
+  rate_limit only: :search, with: SEARCH_LIMIT
+  rate_limit only: :stream, with: :stream_limiter
+
+  private
+
+  def stream_limiter
+    ActionLimiter::Concurrent.new("stream:#{params[:id]}", limit: 1, lock_timeout: 60)
+  end
+end
+```
+
+`rate_limit` wraps matching actions in an `around_action`, so a Concurrent slot is held for the
+whole action. It accepts the usual callback filters (`only:`, `except:`, `if:`, `unless:`) and
+replaces Rails' built-in `rate_limit` in controllers that include the concern.
+
+Over the limit, `handle_over_limit_error(error)` raises `ActionController::TooManyRequests`
+whose `cause` is the `ActionLimiter::OverLimit`, so a `rescue_from` handler can read
+`error.cause.retry_after`. Override `handle_over_limit_error` to respond differently. An
+`OverLimit` raised from inside the action itself is not converted.
+
+To use a Points limiter, give it a `default_estimate:`; assign it to an instance variable in the
+block if the action needs it.
+
 ## ActiveJob
 
 ```ruby

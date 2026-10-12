@@ -14,6 +14,7 @@ require 'sorbet-runtime'
 require 'action_limiter/version'
 
 module ActionLimiter
+  autoload :ActionController, 'action_limiter/action_controller'
   autoload :AutomaticRetries, 'action_limiter/automatic_retries'
   autoload :Bucket, 'action_limiter/bucket'
   autoload :Concurrent, 'action_limiter/concurrent'

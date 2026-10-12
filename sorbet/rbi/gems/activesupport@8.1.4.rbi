@@ -2501,6 +2501,31 @@ class ActiveSupport::Cache::Strategy::LocalCache::LocalStore
   def write_entry(key, entry); end
 end
 
+# --
+# This class wraps up local storage for middlewares. Only the middleware method should
+# construct them.
+#
+# pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:13
+class ActiveSupport::Cache::Strategy::LocalCache::Middleware
+  # pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:17
+  def initialize(name, cache); end
+
+  # pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:15
+  def cache; end
+
+  # pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:15
+  def cache=(_arg0); end
+
+  # pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:28
+  def call(env); end
+
+  # pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:14
+  def name; end
+
+  # pkg:gem/activesupport#lib/active_support/cache/strategy/local_cache_middleware.rb:23
+  def new(app); end
+end
+
 # These options mean something to all cache implementations. Individual cache
 # implementations may support additional options.
 #
@@ -6757,6 +6782,409 @@ class ActiveSupport::Gzip::Stream < ::StringIO
 
   # pkg:gem/activesupport#lib/active_support/gzip.rb:23
   def close; end
+end
+
+# = \Hash With Indifferent Access
+#
+# Implements a hash where keys <tt>:foo</tt> and <tt>"foo"</tt> are considered
+# to be the same.
+#
+#   rgb = ActiveSupport::HashWithIndifferentAccess.new
+#
+#   rgb[:black] = '#000000'
+#   rgb[:black]  # => '#000000'
+#   rgb['black'] # => '#000000'
+#
+#   rgb['white'] = '#FFFFFF'
+#   rgb[:white]  # => '#FFFFFF'
+#   rgb['white'] # => '#FFFFFF'
+#
+# Internally symbols are mapped to strings when used as keys in the entire
+# writing interface (calling <tt>[]=</tt>, <tt>merge</tt>, etc). This
+# mapping belongs to the public interface. For example, given:
+#
+#   hash = ActiveSupport::HashWithIndifferentAccess.new(a: 1)
+#
+# You are guaranteed that the key is returned as a string:
+#
+#   hash.keys # => ["a"]
+#
+# Technically other types of keys are accepted:
+#
+#   hash = ActiveSupport::HashWithIndifferentAccess.new(a: 1)
+#   hash[0] = 0
+#   hash # => {"a"=>1, 0=>0}
+#
+# but this class is intended for use cases where strings or symbols are the
+# expected keys and it is convenient to understand both as the same. For
+# example the +params+ hash in Ruby on \Rails.
+#
+# Note that core extensions define <tt>Hash#with_indifferent_access</tt>:
+#
+#   rgb = { black: '#000000', white: '#FFFFFF' }.with_indifferent_access
+#
+# which may be handy.
+#
+# To access this class outside of \Rails, require the core extension with:
+#
+#   require "active_support/core_ext/hash/indifferent_access"
+#
+# which will, in turn, require this file.
+#
+# pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:55
+class ActiveSupport::HashWithIndifferentAccess < ::Hash
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:70
+  def initialize(constructor = T.unsafe(nil)); end
+
+  # Same as <tt>Hash#[]</tt> where the key passed as argument can be
+  # either a string or a symbol:
+  #
+  #   counters = ActiveSupport::HashWithIndifferentAccess.new
+  #   counters[:foo] = 1
+  #
+  #   counters['foo'] # => 1
+  #   counters[:foo]  # => 1
+  #   counters[:zoo]  # => nil
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:184
+  def [](key); end
+
+  # Assigns a new value to the hash:
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash[:key] = 'value'
+  #
+  # This value can be later fetched using either +:key+ or <tt>'key'</tt>.
+  #
+  # If the value is a Hash or contains one or multiple Hashes, they will be
+  # converted to +HashWithIndifferentAccess+.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:101
+  def []=(key, value); end
+
+  # Same as <tt>Hash#assoc</tt> where the key passed as argument can be
+  # either a string or a symbol:
+  #
+  #   counters = ActiveSupport::HashWithIndifferentAccess.new
+  #   counters[:foo] = 1
+  #
+  #   counters.assoc('foo') # => ["foo", 1]
+  #   counters.assoc(:foo)  # => ["foo", 1]
+  #   counters.assoc(:zoo)  # => nil
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:197
+  def assoc(key); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:391
+  def compact; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:334
+  def deep_symbolize_keys; end
+
+  # Same as <tt>Hash#default</tt> where the key passed as argument can be
+  # either a string or a symbol:
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new(1)
+  #   hash.default                   # => 1
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new { |hash, key| key }
+  #   hash.default                   # => nil
+  #   hash.default('foo')            # => 'foo'
+  #   hash.default(:foo)             # => 'foo'
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:239
+  def default(key = T.unsafe(nil)); end
+
+  # Removes the specified key from the hash.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:317
+  def delete(key); end
+
+  # Same as <tt>Hash#dig</tt> where the key passed as argument can be
+  # either a string or a symbol:
+  #
+  #   counters = ActiveSupport::HashWithIndifferentAccess.new
+  #   counters[:foo] = { bar: 1 }
+  #
+  #   counters.dig('foo', 'bar')     # => 1
+  #   counters.dig(:foo, :bar)       # => 1
+  #   counters.dig(:zoo)             # => nil
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:224
+  def dig(*args); end
+
+  # Returns a shallow copy of the hash.
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new({ a: { b: 'b' } })
+  #   dup  = hash.dup
+  #   dup[:a][:c] = 'c'
+  #
+  #   hash[:a][:c] # => "c"
+  #   dup[:a][:c]  # => "c"
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:280
+  def dup; end
+
+  # Returns a hash with indifferent access that includes everything except given keys.
+  #   hash = { a: "x", b: "y", c: 10 }.with_indifferent_access
+  #   hash.except(:a, "b") # => {c: 10}.with_indifferent_access
+  #   hash                 # => { a: "x", b: "y", c: 10 }.with_indifferent_access
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:325
+  def except(*keys); end
+
+  # Returns +true+ so that <tt>Array#extract_options!</tt> finds members of
+  # this class.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:58
+  def extractable_options?; end
+
+  # Same as <tt>Hash#fetch</tt> where the key passed as argument can be
+  # either a string or a symbol:
+  #
+  #   counters = ActiveSupport::HashWithIndifferentAccess.new
+  #   counters[:foo] = 1
+  #
+  #   counters.fetch('foo')          # => 1
+  #   counters.fetch(:bar, 0)        # => 0
+  #   counters.fetch(:bar) { |key| 0 } # => 0
+  #   counters.fetch(:zoo)           # => KeyError: key not found: "zoo"
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:211
+  def fetch(key, *extras); end
+
+  # Returns an array of the values at the specified indices, but also
+  # raises an exception when one of the keys can't be found.
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash[:a] = 'x'
+  #   hash[:b] = 'y'
+  #   hash.fetch_values('a', 'b') # => ["x", "y"]
+  #   hash.fetch_values('a', 'c') { |key| 'z' } # => ["x", "z"]
+  #   hash.fetch_values('a', 'c') # => KeyError: key not found: "c"
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:267
+  def fetch_values(*indices, &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:341
+  def filter(*args, &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:172
+  def has_key?(key); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:171
+  def include?(key); end
+
+  # Checks the hash for a key matching the argument passed in:
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash['key'] = 'value'
+  #   hash.key?(:key)  # => true
+  #   hash.key?('key') # => true
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:167
+  def key?(key); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:173
+  def member?(key); end
+
+  # This method has the same semantics of +update+, except it does not
+  # modify the receiver but rather returns a new hash with indifferent
+  # access with the result of the merge.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:287
+  def merge(*hashes, &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:159
+  def merge!(*other_hashes, &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:66
+  def nested_under_indifferent_access; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:90
+  def regular_update(*_arg0); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:89
+  def regular_writer(_arg0, _arg1); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:343
+  def reject(*args, &block); end
+
+  # Replaces the contents of this hash with other_hash.
+  #
+  #   h = { "a" => 100, "b" => 200 }
+  #   h.replace({ "c" => 300, "d" => 400 }) # => {"c"=>300, "d"=>400}
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:312
+  def replace(other_hash); end
+
+  # Like +merge+ but the other way around: Merges the receiver into the
+  # argument and returns a new hash with indifferent access as result:
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash['a'] = nil
+  #   hash.reverse_merge(a: 0, b: 1) # => {"a"=>nil, "b"=>1}
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:297
+  def reverse_merge(other_hash); end
+
+  # Same semantics as +reverse_merge+ but modifies the receiver in-place.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:303
+  def reverse_merge!(other_hash); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:337
+  def select(*args, &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:381
+  def slice(*keys); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:386
+  def slice!(*keys); end
+
+  # Assigns a new value to the hash:
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash[:key] = 'value'
+  #
+  # This value can be later fetched using either +:key+ or <tt>'key'</tt>.
+  #
+  # If the value is a Hash or contains one or multiple Hashes, they will be
+  # converted to +HashWithIndifferentAccess+. unless `convert_value: false`
+  # is set.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:115
+  def store(key, value, convert_value: T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:332
+  def symbolize_keys; end
+
+  # Convert to a regular hash with string keys.
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:396
+  def to_hash; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:333
+  def to_options; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:335
+  def to_options!; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:402
+  def to_proc; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:355
+  def transform_keys(hash = T.unsafe(nil), &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:367
+  def transform_keys!(hash = T.unsafe(nil), &block); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:348
+  def transform_values(&block); end
+
+  # Updates the receiver in-place, merging in the hashes passed as arguments:
+  #
+  #   hash_1 = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash_1[:key] = 'value'
+  #
+  #   hash_2 = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash_2[:key] = 'New Value!'
+  #
+  #   hash_1.update(hash_2) # => {"key"=>"New Value!"}
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash.update({ "a" => 1 }, { "b" => 2 }) # => { "a" => 1, "b" => 2 }
+  #
+  # The arguments can be either an
+  # +ActiveSupport::HashWithIndifferentAccess+ or a regular +Hash+.
+  # In either case the merge respects the semantics of indifferent access.
+  #
+  # If the argument is a regular hash with keys +:key+ and <tt>"key"</tt> only one
+  # of the values end up in the receiver, but which one is unspecified.
+  #
+  # When given a block, the value for duplicated keys will be determined
+  # by the result of invoking the block with the duplicated key, the value
+  # in the receiver, and the value in +other_hash+. The rules for duplicated
+  # keys follow the semantics of indifferent access:
+  #
+  #   hash_1[:key] = 10
+  #   hash_2['key'] = 12
+  #   hash_1.update(hash_2) { |key, old, new| old + new } # => {"key"=>22}
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:148
+  def update(*other_hashes, &block); end
+
+  # Returns an array of the values at the specified indices:
+  #
+  #   hash = ActiveSupport::HashWithIndifferentAccess.new
+  #   hash[:a] = 'x'
+  #   hash[:b] = 'y'
+  #   hash.values_at('a', 'b') # => ["x", "y"]
+  #
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:253
+  def values_at(*keys); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:300
+  def with_defaults(other_hash); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:306
+  def with_defaults!(other_hash); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:62
+  def with_indifferent_access; end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:328
+  def without(*keys); end
+
+  private
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:407
+  def cast(other); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:411
+  def convert_key(key); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:415
+  def convert_value(value, conversion: T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:428
+  def convert_value_to_hash(value); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:439
+  def copy_defaults(target); end
+
+  # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:448
+  def update_with_single_argument(other_hash, block); end
+
+  class << self
+    # pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:85
+    def [](*args); end
+  end
+end
+
+# pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:353
+ActiveSupport::HashWithIndifferentAccess::NOT_GIVEN = T.let(T.unsafe(nil), Object)
+
+# pkg:gem/activesupport#lib/active_support/html_safe_translation.rb:4
+module ActiveSupport::HtmlSafeTranslation
+  extend ::ActiveSupport::HtmlSafeTranslation
+
+  # pkg:gem/activesupport#lib/active_support/html_safe_translation.rb:30
+  def html_safe_translation_key?(key); end
+
+  # pkg:gem/activesupport#lib/active_support/html_safe_translation.rb:7
+  def translate(key, **options); end
+
+  private
+
+  # pkg:gem/activesupport#lib/active_support/html_safe_translation.rb:35
+  def html_escape_translation_options(options); end
+
+  # pkg:gem/activesupport#lib/active_support/html_safe_translation.rb:48
+  def html_safe_translation(translation); end
+
+  # pkg:gem/activesupport#lib/active_support/html_safe_translation.rb:43
+  def i18n_option?(name); end
 end
 
 # = Active Support \Inflector
@@ -11814,6 +12242,49 @@ class ActiveSupport::Subscriber
   end
 end
 
+# This is a class for wrapping syntax errors.  The purpose of this class
+# is to enhance the backtraces on SyntaxError exceptions to include the
+# source location of the syntax error.  That way we can display the error
+# source on error pages in development.
+#
+# pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:10
+class ActiveSupport::SyntaxErrorProxy
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:11
+  def backtrace; end
+
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:41
+  def backtrace_locations; end
+
+  private
+
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:54
+  def parse_message_for_trace; end
+end
+
+# pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:15
+class ActiveSupport::SyntaxErrorProxy::BacktraceLocation < ::Struct
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:25
+  def absolute_path; end
+
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:22
+  def base_label; end
+
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:19
+  def label; end
+
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:16
+  def spot(_); end
+end
+
+# pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:30
+class ActiveSupport::SyntaxErrorProxy::BacktraceLocationProxy
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:31
+  def initialize(loc, ex); end
+
+  # pkg:gem/activesupport#lib/active_support/syntax_error_proxy.rb:36
+  def spot(_); end
+end
+
 # pkg:gem/activesupport#lib/active_support/event_reporter.rb:6
 class ActiveSupport::TagStack
   class << self
@@ -14388,6 +14859,62 @@ ActiveSupport::VERSION::STRING = T.let(T.unsafe(nil), String)
 # pkg:gem/activesupport#lib/active_support/gem_version.rb:12
 ActiveSupport::VERSION::TINY = T.let(T.unsafe(nil), Integer)
 
+# pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:140
+class ActiveSupport::XMLConverter
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:151
+  def initialize(xml, disallowed_types = T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:156
+  def to_h; end
+
+  private
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:222
+  def become_array?(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:218
+  def become_content?(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:226
+  def become_empty_string?(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:232
+  def become_hash?(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:172
+  def deep_to_h(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:241
+  def garbage?(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:161
+  def normalize_keys(params); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:236
+  def nothing?(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:257
+  def process_array(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:248
+  def process_content(value); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:185
+  def process_hash(value); end
+end
+
+# pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:149
+ActiveSupport::XMLConverter::DISALLOWED_TYPES = T.let(T.unsafe(nil), Array)
+
+# Raised if the XML contains attributes with type="yaml" or
+# type="symbol". Read Hash#from_xml for more details.
+#
+# pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:143
+class ActiveSupport::XMLConverter::DisallowedType < ::StandardError
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:144
+  def initialize(type); end
+end
+
 # = \XmlMini
 #
 # To use the much faster libxml parser:
@@ -14587,6 +15114,29 @@ class Array
   # pkg:gem/activesupport#lib/active_support/core_ext/enumerable.rb:275
   def compact_blank!; end
 
+  # Returns a deep copy of array.
+  #
+  #   array = [1, [2, 3]]
+  #   dup   = array.deep_dup
+  #   dup[1][2] = 4
+  #
+  #   array[1][2] # => nil
+  #   dup[1][2]   # => 4
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/object/deep_dup.rb:29
+  def deep_dup; end
+
+  # Returns a copy of the Array excluding the specified elements.
+  #
+  #   ["David", "Rafael", "Aaron", "Todd"].excluding("Aaron", "Todd") # => ["David", "Rafael"]
+  #   [ [ 0, 1 ], [ 1, 0 ] ].excluding([ [ 1, 0 ] ]) # => [ [ 0, 1 ] ]
+  #
+  # Note: This is an optimization of <tt>Enumerable#excluding</tt> that uses <tt>Array#-</tt>
+  # instead of <tt>Array#reject</tt> for performance reasons.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:47
+  def excluding(*elements); end
+
   # Removes and returns the elements for which the block returns a true value.
   # If no block is given, an Enumerator is returned instead.
   #
@@ -14610,8 +15160,89 @@ class Array
   # pkg:gem/activesupport#lib/active_support/core_ext/array/extract_options.rb:24
   def extract_options!; end
 
+  # Equal to <tt>self[4]</tt>.
+  #
+  #   %w( a b c d e ).fifth # => "e"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:76
+  def fifth; end
+
+  # Equal to <tt>self[41]</tt>. Also known as accessing "the reddit".
+  #
+  #   (1..42).to_a.forty_two # => 42
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:83
+  def forty_two; end
+
+  # Equal to <tt>self[3]</tt>.
+  #
+  #   %w( a b c d e ).fourth # => "d"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:69
+  def fourth; end
+
+  # Returns the tail of the array from +position+.
+  #
+  #   %w( a b c d ).from(0)  # => ["a", "b", "c", "d"]
+  #   %w( a b c d ).from(2)  # => ["c", "d"]
+  #   %w( a b c d ).from(10) # => []
+  #   %w().from(0)           # => []
+  #   %w( a b c d ).from(-2) # => ["c", "d"]
+  #   %w( a b c ).from(-10)  # => []
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:12
+  def from(position); end
+
+  # Returns a new array that includes the passed elements.
+  #
+  #   [ 1, 2, 3 ].including(4, 5) # => [ 1, 2, 3, 4, 5 ]
+  #   [ [ 0, 1 ] ].including([ [ 1, 0 ] ]) # => [ [ 0, 1 ], [ 1, 0 ] ]
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:36
+  def including(*elements); end
+
   # pkg:gem/activesupport#lib/active_support/core_ext/object/blank.rb:104
   def present?; end
+
+  # Equal to <tt>self[1]</tt>.
+  #
+  #   %w( a b c d e ).second # => "b"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:55
+  def second; end
+
+  # Equal to <tt>self[-2]</tt>.
+  #
+  #   %w( a b c d e ).second_to_last # => "d"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:97
+  def second_to_last; end
+
+  # Equal to <tt>self[2]</tt>.
+  #
+  #   %w( a b c d e ).third # => "c"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:62
+  def third; end
+
+  # Equal to <tt>self[-3]</tt>.
+  #
+  #   %w( a b c d e ).third_to_last # => "c"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:90
+  def third_to_last; end
+
+  # Returns the beginning of the array up to +position+.
+  #
+  #   %w( a b c d ).to(0)  # => ["a"]
+  #   %w( a b c d ).to(2)  # => ["a", "b", "c"]
+  #   %w( a b c d ).to(10) # => ["a", "b", "c", "d"]
+  #   %w().to(0)           # => []
+  #   %w( a b c d ).to(-2) # => ["a", "b", "c"]
+  #   %w( a b c ).to(-10)  # => []
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:24
+  def to(position); end
 
   # pkg:gem/activesupport#lib/active_support/core_ext/array/conversions.rb:106
   def to_formatted_s(format = T.unsafe(nil)); end
@@ -14775,6 +15406,9 @@ class Array
   # pkg:gem/activesupport#lib/active_support/core_ext/array/conversions.rb:183
   def to_xml(options = T.unsafe(nil)); end
 
+  # pkg:gem/activesupport#lib/active_support/core_ext/array/access.rb:50
+  def without(*elements); end
+
   class << self
     # Wraps its argument in an array unless it is already an array (or array-like).
     #
@@ -14837,6 +15471,8 @@ end
 
 # pkg:gem/activesupport#lib/active_support/core_ext/class/attribute.rb:6
 class Class < ::Module
+  include ::ActiveSupport::DescendantsTracker::ReloadedClassesFiltering
+
   # Declare a class-level attribute whose value is inheritable by subclasses.
   # Subclasses can change their own value and it will not impact parent class.
   #
@@ -14919,6 +15555,26 @@ class Class < ::Module
   #
   # pkg:gem/activesupport#lib/active_support/core_ext/class/attribute.rb:86
   def class_attribute(*attrs, instance_accessor: T.unsafe(nil), instance_reader: T.unsafe(nil), instance_writer: T.unsafe(nil), instance_predicate: T.unsafe(nil), default: T.unsafe(nil)); end
+
+  # Returns an array with all classes that are < than its receiver.
+  #
+  #   class C; end
+  #   C.descendants # => []
+  #
+  #   class B < C; end
+  #   C.descendants # => [B]
+  #
+  #   class A < B; end
+  #   C.descendants # => [B, A]
+  #
+  #   class D < C; end
+  #   C.descendants # => [B, A, D]
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/class/subclasses.rb:19
+  def descendants; end
+
+  # pkg:gem/activesupport#lib/active_support/descendants_tracker.rb:59
+  def subclasses; end
 end
 
 # pkg:gem/activesupport#lib/active_support/core_ext/object/json.rb:68
@@ -16292,6 +16948,18 @@ class Hash
   # pkg:gem/activesupport#lib/active_support/core_ext/enumerable.rb:244
   def compact_blank!; end
 
+  # Returns a deep copy of hash.
+  #
+  #   hash = { a: { b: 'b' } }
+  #   dup  = hash.deep_dup
+  #   dup[:a][:c] = 'c'
+  #
+  #   hash[:a][:c] # => nil
+  #   dup[:a][:c]  # => "c"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/object/deep_dup.rb:43
+  def deep_dup; end
+
   # pkg:gem/activesupport#lib/active_support/core_ext/hash/deep_merge.rb:40
   def deep_merge?(other); end
 
@@ -16378,8 +17046,44 @@ class Hash
   # pkg:gem/activesupport#lib/active_support/core_ext/array/extract_options.rb:9
   def extractable_options?; end
 
+  # Called when object is nested under an object that receives
+  # #with_indifferent_access. This method will be called on the current object
+  # by the enclosing object and is aliased to #with_indifferent_access by
+  # default. Subclasses of Hash may override this method to return +self+ if
+  # converting to an ActiveSupport::HashWithIndifferentAccess would not be
+  # desirable.
+  #
+  #   b = { b: 1 }
+  #   { a: b }.with_indifferent_access['a'] # calls b.nested_under_indifferent_access
+  #   # => {"b"=>1}
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/indifferent_access.rb:23
+  def nested_under_indifferent_access; end
+
   # pkg:gem/activesupport#lib/active_support/core_ext/object/blank.rb:118
   def present?; end
+
+  # Merges the caller into +other_hash+. For example,
+  #
+  #   options = options.reverse_merge(size: 25, velocity: 10)
+  #
+  # is equivalent to
+  #
+  #   options = { size: 25, velocity: 10 }.merge(options)
+  #
+  # This is particularly useful for initializing an options hash
+  # with default values.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/reverse_merge.rb:14
+  def reverse_merge(other_hash); end
+
+  # Destructive +reverse_merge+.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/reverse_merge.rb:20
+  def reverse_merge!(other_hash); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/reverse_merge.rb:23
+  def reverse_update(other_hash); end
 
   # Replaces the hash with only the given keys.
   # Returns a hash containing the removed key/value pairs.
@@ -16450,6 +17154,85 @@ class Hash
   # pkg:gem/activesupport#lib/active_support/core_ext/object/to_query.rb:81
   def to_query(namespace = T.unsafe(nil)); end
 
+  # Returns a string containing an XML representation of its receiver:
+  #
+  #   { foo: 1, bar: 2 }.to_xml
+  #   # =>
+  #   # <?xml version="1.0" encoding="UTF-8"?>
+  #   # <hash>
+  #   #   <foo type="integer">1</foo>
+  #   #   <bar type="integer">2</bar>
+  #   # </hash>
+  #
+  # To do so, the method loops over the pairs and builds nodes that depend on
+  # the _values_. Given a pair +key+, +value+:
+  #
+  # * If +value+ is a hash there's a recursive call with +key+ as <tt>:root</tt>.
+  #
+  # * If +value+ is an array there's a recursive call with +key+ as <tt>:root</tt>,
+  #   and +key+ singularized as <tt>:children</tt>.
+  #
+  # * If +value+ is a callable object it must expect one or two arguments. Depending
+  #   on the arity, the callable is invoked with the +options+ hash as first argument
+  #   with +key+ as <tt>:root</tt>, and +key+ singularized as second argument. The
+  #   callable can add nodes by using <tt>options[:builder]</tt>.
+  #
+  #     {foo: lambda { |options, key| options[:builder].b(key) }}.to_xml
+  #     # => "<b>foo</b>"
+  #
+  # * If +value+ responds to +to_xml+ the method is invoked with +key+ as <tt>:root</tt>.
+  #
+  #     class Foo
+  #       def to_xml(options)
+  #         options[:builder].bar 'fooing!'
+  #       end
+  #     end
+  #
+  #     { foo: Foo.new }.to_xml(skip_instruct: true)
+  #     # =>
+  #     # <hash>
+  #     #   <bar>fooing!</bar>
+  #     # </hash>
+  #
+  # * Otherwise, a node with +key+ as tag is created with a string representation of
+  #   +value+ as text node. If +value+ is +nil+ an attribute "nil" set to "true" is added.
+  #   Unless the option <tt>:skip_types</tt> exists and is true, an attribute "type" is
+  #   added as well according to the following mapping:
+  #
+  #     XML_TYPE_NAMES = {
+  #       "Symbol"     => "symbol",
+  #       "Integer"    => "integer",
+  #       "BigDecimal" => "decimal",
+  #       "Float"      => "float",
+  #       "TrueClass"  => "boolean",
+  #       "FalseClass" => "boolean",
+  #       "Date"       => "date",
+  #       "DateTime"   => "dateTime",
+  #       "Time"       => "dateTime"
+  #     }
+  #
+  # By default the root node is "hash", but that's configurable via the <tt>:root</tt> option.
+  #
+  # The default XML builder is a fresh instance of +Builder::XmlMarkup+. You can
+  # configure your own builder with the <tt>:builder</tt> option. The method also accepts
+  # options like <tt>:dasherize</tt> and friends, they are forwarded to the builder.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:74
+  def to_xml(options = T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/reverse_merge.rb:17
+  def with_defaults(other_hash); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/reverse_merge.rb:24
+  def with_defaults!(other_hash); end
+
+  # Returns an ActiveSupport::HashWithIndifferentAccess out of its receiver:
+  #
+  #   { a: 1 }.with_indifferent_access['a'] # => 1
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/hash/indifferent_access.rb:9
+  def with_indifferent_access; end
+
   private
 
   # Support methods for deep transforming nested hashes and arrays.
@@ -16459,7 +17242,57 @@ class Hash
 
   # pkg:gem/activesupport#lib/active_support/core_ext/hash/keys.rb:129
   def _deep_transform_keys_in_object!(object, &block); end
+
+  class << self
+    # Builds a Hash from XML just like <tt>Hash.from_xml</tt>, but also allows Symbol and YAML.
+    #
+    # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:133
+    def from_trusted_xml(xml); end
+
+    # Returns a Hash containing a collection of pairs when the key is the node name and the value is
+    # its content
+    #
+    #   xml = <<-XML
+    #     <?xml version="1.0" encoding="UTF-8"?>
+    #       <hash>
+    #         <foo type="integer">1</foo>
+    #         <bar type="integer">2</bar>
+    #       </hash>
+    #   XML
+    #
+    #   hash = Hash.from_xml(xml)
+    #   # => {"hash"=>{"foo"=>1, "bar"=>2}}
+    #
+    # +DisallowedType+ is raised if the XML contains attributes with <tt>type="yaml"</tt> or
+    # <tt>type="symbol"</tt>. Use <tt>Hash.from_trusted_xml</tt> to
+    # parse this XML.
+    #
+    # Custom +disallowed_types+ can also be passed in the form of an
+    # array.
+    #
+    #   xml = <<-XML
+    #     <?xml version="1.0" encoding="UTF-8"?>
+    #       <hash>
+    #         <foo type="integer">1</foo>
+    #         <bar type="string">"David"</bar>
+    #       </hash>
+    #   XML
+    #
+    #   hash = Hash.from_xml(xml, ['integer'])
+    #   # => ActiveSupport::XMLConverter::DisallowedType: Disallowed type attribute: "integer"
+    #
+    # Note that passing custom disallowed types will override the default types,
+    # which are Symbol and YAML.
+    #
+    # pkg:gem/activesupport#lib/active_support/core_ext/hash/conversions.rb:128
+    def from_xml(xml, disallowed_types = T.unsafe(nil)); end
+  end
 end
+
+# :stopdoc:
+#
+# pkg:gem/activesupport#lib/active_support/hash_with_indifferent_access.rb:465
+HashWithIndifferentAccess = ActiveSupport::HashWithIndifferentAccess
 
 # pkg:gem/activesupport#lib/active_support/core_ext/object/json.rb:151
 class IO
@@ -16695,8 +17528,77 @@ end
 #
 # pkg:gem/activesupport#lib/active_support/core_ext/module/delegation.rb:3
 class Module
+  include ::Module::Concerning
+
+  # Allows you to make aliases for attributes, which includes
+  # getter, setter, and a predicate.
+  #
+  #   class Content < ActiveRecord::Base
+  #     # has a title attribute
+  #   end
+  #
+  #   class Email < Content
+  #     alias_attribute :subject, :title
+  #   end
+  #
+  #   e = Email.find(1)
+  #   e.title    # => "Superstars"
+  #   e.subject  # => "Superstars"
+  #   e.subject? # => true
+  #   e.subject = "Megastars"
+  #   e.title    # => "Megastars"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/aliasing.rb:21
+  def alias_attribute(new_name, old_name); end
+
+  # A module may or may not have a name.
+  #
+  #   module M; end
+  #   M.name # => "M"
+  #
+  #   m = Module.new
+  #   m.name # => nil
+  #
+  # +anonymous?+ method returns true if module does not have a name, false otherwise:
+  #
+  #   Module.new.anonymous? # => true
+  #
+  #   module M; end
+  #   M.anonymous?          # => false
+  #
+  # A module gets a name when it is first assigned to a constant. Either
+  # via the +module+ or +class+ keyword or by an explicit assignment:
+  #
+  #   m = Module.new # creates an anonymous module
+  #   m.anonymous?   # => true
+  #   M = m          # m gets a name here as a side-effect
+  #   m.name         # => "M"
+  #   m.anonymous?   # => false
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/anonymous.rb:27
+  def anonymous?; end
+
   # pkg:gem/activesupport#lib/active_support/core_ext/object/json.rb:53
   def as_json(options = T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:20
+  def attr_internal(*attrs); end
+
+  # Declares an attribute reader and writer backed by an internally-named instance
+  # variable.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:16
+  def attr_internal_accessor(*attrs); end
+
+  # Declares an attribute reader backed by an internally-named instance variable.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:5
+  def attr_internal_reader(*attrs); end
+
+  # Declares an attribute writer backed by an internally-named instance variable.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:10
+  def attr_internal_writer(*attrs); end
 
   # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors.rb:213
   def cattr_accessor(*syms, instance_reader: T.unsafe(nil), instance_writer: T.unsafe(nil), instance_accessor: T.unsafe(nil), default: T.unsafe(nil), &blk); end
@@ -16706,6 +17608,16 @@ class Module
 
   # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors.rb:140
   def cattr_writer(*syms, instance_writer: T.unsafe(nil), instance_accessor: T.unsafe(nil), default: T.unsafe(nil), location: T.unsafe(nil)); end
+
+  # Returns a copy of module or class if it's anonymous. If it's
+  # named, returns +self+.
+  #
+  #   Object.deep_dup == Object # => true
+  #   klass = Class.new
+  #   klass.deep_dup == klass # => false
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/object/deep_dup.rb:64
+  def deep_dup; end
 
   # Provides a +delegate+ class method to easily expose contained objects'
   # public methods as your own.
@@ -17102,6 +18014,48 @@ class Module
   # pkg:gem/activesupport#lib/active_support/core_ext/module/redefine_method.rb:30
   def method_visibility(method); end
 
+  # Returns the module which contains this one according to its name.
+  #
+  #   module M
+  #     module N
+  #     end
+  #   end
+  #   X = M::N
+  #
+  #   M::N.module_parent # => M
+  #   X.module_parent    # => M
+  #
+  # The parent of top-level and anonymous modules is Object.
+  #
+  #   M.module_parent          # => Object
+  #   Module.new.module_parent # => Object
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/introspection.rb:37
+  def module_parent; end
+
+  # Returns the name of the module containing this one.
+  #
+  #   M::N.module_parent_name # => "M"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/introspection.rb:9
+  def module_parent_name; end
+
+  # Returns all the parents of this module according to its name, ordered from
+  # nested outwards. The receiver is not contained within the result.
+  #
+  #   module M
+  #     module N
+  #     end
+  #   end
+  #   X = M::N
+  #
+  #   M.module_parents    # => [Object]
+  #   M::N.module_parents # => [M, Object]
+  #   X.module_parents    # => [M, Object]
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/introspection.rb:53
+  def module_parents; end
+
   # Replaces the existing method definition, if there is one, with the passed
   # block as its body.
   #
@@ -17130,15 +18084,303 @@ class Module
   #
   # pkg:gem/activesupport#lib/active_support/core_ext/module/redefine_method.rb:7
   def silence_redefinition_of_method(method); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors_per_thread.rb:174
+  def thread_cattr_accessor(*syms, instance_reader: T.unsafe(nil), instance_writer: T.unsafe(nil), instance_accessor: T.unsafe(nil), default: T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors_per_thread.rb:81
+  def thread_cattr_reader(*syms, instance_reader: T.unsafe(nil), instance_accessor: T.unsafe(nil), default: T.unsafe(nil)); end
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors_per_thread.rb:123
+  def thread_cattr_writer(*syms, instance_writer: T.unsafe(nil), instance_accessor: T.unsafe(nil)); end
+
+  # Defines both class and instance accessors for class attributes.
+  #
+  #   class Account
+  #     thread_mattr_accessor :user
+  #   end
+  #
+  #   Account.user = "DHH"
+  #   Account.user     # => "DHH"
+  #   Account.new.user # => "DHH"
+  #
+  # Unlike +mattr_accessor+, values are *not* shared with subclasses or parent classes.
+  # If a subclass changes the value, the parent class' value is not changed.
+  # If the parent class changes the value, the value of subclasses is not changed.
+  #
+  #   class Customer < Account
+  #   end
+  #
+  #   Account.user   # => "DHH"
+  #   Customer.user  # => nil
+  #   Customer.user  = "Rafael"
+  #   Customer.user  # => "Rafael"
+  #   Account.user   # => "DHH"
+  #
+  # To omit the instance writer method, pass <tt>instance_writer: false</tt>.
+  # To omit the instance reader method, pass <tt>instance_reader: false</tt>.
+  #
+  #   class Current
+  #     thread_mattr_accessor :user, instance_writer: false, instance_reader: false
+  #   end
+  #
+  #   Current.new.user = "DHH"  # => NoMethodError
+  #   Current.new.user          # => NoMethodError
+  #
+  # Or pass <tt>instance_accessor: false</tt>, to omit both instance methods.
+  #
+  #   class Current
+  #     thread_mattr_accessor :user, instance_accessor: false
+  #   end
+  #
+  #   Current.new.user = "DHH"  # => NoMethodError
+  #   Current.new.user          # => NoMethodError
+  #
+  # A default value may be specified using the +:default+ option. Because
+  # multiple threads can access the default value, non-frozen default values
+  # will be <tt>dup</tt>ed and frozen.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors_per_thread.rb:170
+  def thread_mattr_accessor(*syms, instance_reader: T.unsafe(nil), instance_writer: T.unsafe(nil), instance_accessor: T.unsafe(nil), default: T.unsafe(nil)); end
+
+  # Defines a per-thread class attribute and creates class and instance reader methods.
+  # The underlying per-thread class variable is set to +nil+, if it is not previously defined.
+  #
+  #   module Current
+  #     thread_mattr_reader :user
+  #   end
+  #
+  #   Current.user = "DHH"
+  #   Current.user # => "DHH"
+  #   Thread.new { Current.user }.value # => nil
+  #
+  # The attribute name must be a valid method name in Ruby.
+  #
+  #   module Foo
+  #     thread_mattr_reader :"1_Badname"
+  #   end
+  #   # => NameError: invalid attribute name: 1_Badname
+  #
+  # To omit the instance reader method, pass
+  # <tt>instance_reader: false</tt> or <tt>instance_accessor: false</tt>.
+  #
+  #   class Current
+  #     thread_mattr_reader :user, instance_reader: false
+  #   end
+  #
+  #   Current.new.user # => NoMethodError
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors_per_thread.rb:41
+  def thread_mattr_reader(*syms, instance_reader: T.unsafe(nil), instance_accessor: T.unsafe(nil), default: T.unsafe(nil)); end
+
+  # Defines a per-thread class attribute and creates a class and instance writer methods to
+  # allow assignment to the attribute.
+  #
+  #   module Current
+  #     thread_mattr_writer :user
+  #   end
+  #
+  #   Current.user = "DHH"
+  #   Thread.current[:attr_Current_user] # => "DHH"
+  #
+  # To omit the instance writer method, pass
+  # <tt>instance_writer: false</tt> or <tt>instance_accessor: false</tt>.
+  #
+  #   class Current
+  #     thread_mattr_writer :user, instance_writer: false
+  #   end
+  #
+  #   Current.new.user = "DHH" # => NoMethodError
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attribute_accessors_per_thread.rb:101
+  def thread_mattr_writer(*syms, instance_writer: T.unsafe(nil), instance_accessor: T.unsafe(nil)); end
+
+  private
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:40
+  def attr_internal_define(attr_name, type); end
+
+  class << self
+    # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:23
+    def attr_internal_naming_format; end
+
+    # pkg:gem/activesupport#lib/active_support/core_ext/module/attr_internal.rb:25
+    def attr_internal_naming_format=(format); end
+  end
+end
+
+# == Bite-sized separation of concerns
+#
+# We often find ourselves with a medium-sized chunk of behavior that we'd
+# like to extract, but only mix in to a single class.
+#
+# Extracting a plain old Ruby object to encapsulate it and collaborate or
+# delegate to the original object is often a good choice, but when there's
+# no additional state to encapsulate or we're making DSL-style declarations
+# about the parent class, introducing new collaborators can obfuscate rather
+# than simplify.
+#
+# The typical route is to just dump everything in a monolithic class, perhaps
+# with a comment, as a least-bad alternative. Using modules in separate files
+# means tedious sifting to get a big-picture view.
+#
+# == Dissatisfying ways to separate small concerns
+#
+# === Using comments:
+#
+#   class Todo < ApplicationRecord
+#     # Other todo implementation
+#     # ...
+#
+#     ## Event tracking
+#     has_many :events
+#
+#     before_create :track_creation
+#
+#     private
+#       def track_creation
+#         # ...
+#       end
+#   end
+#
+# === With an inline module:
+#
+# Noisy syntax.
+#
+#   class Todo < ApplicationRecord
+#     # Other todo implementation
+#     # ...
+#
+#     module EventTracking
+#       extend ActiveSupport::Concern
+#
+#       included do
+#         has_many :events
+#         before_create :track_creation
+#       end
+#
+#       private
+#         def track_creation
+#           # ...
+#         end
+#     end
+#     include EventTracking
+#   end
+#
+# === Mix-in noise exiled to its own file:
+#
+# Once our chunk of behavior starts pushing the scroll-to-understand-it
+# boundary, we give in and move it to a separate file. At this size, the
+# increased overhead can be a reasonable tradeoff even if it reduces our
+# at-a-glance perception of how things work.
+#
+#   class Todo < ApplicationRecord
+#     # Other todo implementation
+#     # ...
+#
+#     include TodoEventTracking
+#   end
+#
+# == Introducing Module#concerning
+#
+# By quieting the mix-in noise, we arrive at a natural, low-ceremony way to
+# separate bite-sized concerns.
+#
+#   class Todo < ApplicationRecord
+#     # Other todo implementation
+#     # ...
+#
+#     concerning :EventTracking do
+#       included do
+#         has_many :events
+#         before_create :track_creation
+#       end
+#
+#       private
+#         def track_creation
+#           # ...
+#         end
+#     end
+#   end
+#
+#   Todo.ancestors
+#   # => [Todo, Todo::EventTracking, ApplicationRecord, Object]
+#
+# This small step has some wonderful ripple effects. We can
+# * grok the behavior of our class in one glance,
+# * clean up monolithic junk-drawer classes by separating their concerns, and
+# * stop leaning on protected/private for crude "this is internal stuff" modularity.
+#
+# === Prepending concerning
+#
+# <tt>concerning</tt> supports a <tt>prepend: true</tt> argument which will <tt>prepend</tt> the
+# concern instead of using <tt>include</tt> for it.
+#
+# pkg:gem/activesupport#lib/active_support/core_ext/module/concerning.rb:112
+module Module::Concerning
+  # A low-cruft shortcut to define a concern.
+  #
+  #   concern :EventTracking do
+  #     ...
+  #   end
+  #
+  # is equivalent to
+  #
+  #   module EventTracking
+  #     extend ActiveSupport::Concern
+  #
+  #     ...
+  #   end
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/concerning.rb:132
+  def concern(topic, &module_definition); end
+
+  # Define a new concern and mix it in.
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/module/concerning.rb:114
+  def concerning(topic, prepend: T.unsafe(nil), &block); end
 end
 
 # pkg:gem/activesupport#lib/active_support/core_ext/module/delegation.rb:5
 Module::DelegationError = ActiveSupport::DelegationError
 
+# pkg:gem/activesupport#lib/active_support/core_ext/name_error.rb:3
 class NameError < ::StandardError
   include ::ErrorHighlight::CoreExt
   include ::DidYouMean::Correctable
+
+  # Extract the name of the missing constant from the exception message.
+  #
+  #   begin
+  #     HelloWorld
+  #   rescue NameError => e
+  #     e.missing_name
+  #   end
+  #   # => "HelloWorld"
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/name_error.rb:12
+  def missing_name; end
+
+  # Was this exception raised because the given name was missing?
+  #
+  #   begin
+  #     HelloWorld
+  #   rescue NameError => e
+  #     e.missing_name?("HelloWorld")
+  #   end
+  #   # => true
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/name_error.rb:44
+  def missing_name?(name); end
+
+  private
+
+  # pkg:gem/activesupport#lib/active_support/core_ext/name_error.rb:56
+  def real_mod_name(mod); end
 end
+
+# pkg:gem/activesupport#lib/active_support/core_ext/name_error.rb:53
+NameError::UNBOUND_METHOD_MODULE_NAME = T.let(T.unsafe(nil), UnboundMethod)
 
 # pkg:gem/activesupport#lib/active_support/core_ext/object/to_query.rb:19
 class NilClass
@@ -17461,6 +18703,19 @@ class Object < ::BasicObject
   # pkg:gem/activesupport#lib/active_support/core_ext/object/blank.rb:18
   def blank?; end
 
+  # Returns a deep copy of object if it's duplicable. If it's
+  # not duplicable, returns +self+.
+  #
+  #   object = Object.new
+  #   dup    = object.deep_dup
+  #   dup.instance_variable_set(:@a, 1)
+  #
+  #   object.instance_variable_defined?(:@a) # => false
+  #   dup.instance_variable_defined?(:@a)    # => true
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/object/deep_dup.rb:15
+  def deep_dup; end
+
   # Can you safely dup this object?
   #
   # False for method objects;
@@ -17589,6 +18844,95 @@ class Object < ::BasicObject
   #
   # pkg:gem/activesupport#lib/active_support/core_ext/object/with.rb:26
   def with(**attributes); end
+
+  # An elegant way to factor duplication out of options passed to a series of
+  # method calls. Each method called in the block, with the block variable as
+  # the receiver, will have its options merged with the default +options+
+  # <tt>Hash</tt> or <tt>Hash</tt>-like object provided. Each method called on
+  # the block variable must take an options hash as its final argument.
+  #
+  # Without <tt>with_options</tt>, this code contains duplication:
+  #
+  #   class Account < ActiveRecord::Base
+  #     has_many :customers, dependent: :destroy
+  #     has_many :products,  dependent: :destroy
+  #     has_many :invoices,  dependent: :destroy
+  #     has_many :expenses,  dependent: :destroy
+  #   end
+  #
+  # Using <tt>with_options</tt>, we can remove the duplication:
+  #
+  #   class Account < ActiveRecord::Base
+  #     with_options dependent: :destroy do |assoc|
+  #       assoc.has_many :customers
+  #       assoc.has_many :products
+  #       assoc.has_many :invoices
+  #       assoc.has_many :expenses
+  #     end
+  #   end
+  #
+  # It can also be used with an explicit receiver:
+  #
+  #   I18n.with_options locale: user.locale, scope: 'newsletter' do |i18n|
+  #     subject i18n.t :subject
+  #     body    i18n.t :body, user_name: user.name
+  #   end
+  #
+  # When you don't pass an explicit receiver, it executes the whole block
+  # in merging options context:
+  #
+  #   class Account < ActiveRecord::Base
+  #     with_options dependent: :destroy do
+  #       has_many :customers
+  #       has_many :products
+  #       has_many :invoices
+  #       has_many :expenses
+  #     end
+  #   end
+  #
+  # <tt>with_options</tt> can also be nested since the call is forwarded to its receiver.
+  #
+  # NOTE: Each nesting level will merge inherited defaults in addition to their own.
+  #
+  #   class Post < ActiveRecord::Base
+  #     with_options if: :persisted?, length: { minimum: 50 } do
+  #       validates :content, if: -> { content.present? }
+  #     end
+  #   end
+  #
+  # The code is equivalent to:
+  #
+  #   validates :content, length: { minimum: 50 }, if: -> { content.present? }
+  #
+  # Hence the inherited default for +if+ key is ignored.
+  #
+  # NOTE: You cannot call class methods implicitly inside of +with_options+.
+  # You can access these methods using the class name instead:
+  #
+  #   class Phone < ActiveRecord::Base
+  #     enum :phone_number_type, { home: 0, office: 1, mobile: 2 }
+  #
+  #     with_options presence: true do
+  #       validates :phone_number_type, inclusion: { in: Phone.phone_number_types.keys }
+  #     end
+  #   end
+  #
+  # When the block argument is omitted, the decorated Object instance is returned:
+  #
+  #   module MyStyledHelpers
+  #     def styled
+  #       with_options style: "color: red;"
+  #     end
+  #   end
+  #
+  #   styled.link_to "I'm red", "/"
+  #   # => <a href="/" style="color: red;">I'm red</a>
+  #
+  #   styled.button_tag "I'm red too!"
+  #   # => <button style="color: red;">I'm red too!</button>
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/object/with_options.rb:92
+  def with_options(options, &block); end
 end
 
 # pkg:gem/activesupport#lib/active_support/core_ext/object/json.rb:236
@@ -17632,6 +18976,17 @@ end
 class Regexp
   # pkg:gem/activesupport#lib/active_support/core_ext/object/json.rb:140
   def as_json(options = T.unsafe(nil)); end
+
+  # Returns +true+ if the regexp has the multiline flag set.
+  #
+  #   (/./).multiline?  # => false
+  #   (/./m).multiline? # => true
+  #
+  #   Regexp.new(".").multiline?                    # => false
+  #   Regexp.new(".", Regexp::MULTILINE).multiline? # => true
+  #
+  # pkg:gem/activesupport#lib/active_support/core_ext/regexp.rb:11
+  def multiline?; end
 end
 
 # pkg:gem/activesupport#lib/active_support/core_ext/object/duplicable.rb:62
@@ -18265,7 +19620,7 @@ class Struct
   def as_json(options = T.unsafe(nil)); end
 end
 
-# pkg:gem/activesupport#lib/active_support/core_ext/object/json.rb:104
+# pkg:gem/activesupport#lib/active_support/core_ext/object/blank.rb:123
 class Symbol
   include ::Comparable
 
@@ -18290,6 +19645,12 @@ class Thread
 
   # pkg:gem/activesupport#lib/active_support/isolated_execution_state.rb:7
   def active_support_execution_state=(_arg0); end
+end
+
+# pkg:gem/activesupport#lib/active_support/core_ext/thread/backtrace/location.rb:3
+class Thread::Backtrace::Location
+  # pkg:gem/activesupport#lib/active_support/core_ext/thread/backtrace/location.rb:4
+  def spot(ex); end
 end
 
 # pkg:gem/activesupport#lib/active_support/core_ext/time/conversions.rb:7
