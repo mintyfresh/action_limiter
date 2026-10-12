@@ -1,0 +1,121 @@
+plugins:
+  - rubocop-performance
+  - rubocop-sorbet
+
+AllCops:
+  DefaultFormatter: progress
+  DisplayCopNames: true
+  ExtraDetails: true
+  NewCops: enable
+  SuggestExtensions: false
+  TargetRubyVersion: 3.4
+  Exclude:
+    - "bin/*"
+    - "sorbet/**/*.rbi"
+    - "vendor/**/*"
+
+Layout/AccessModifierIndentation:
+  EnforcedStyle: outdent
+
+Layout/ExtraSpacing:
+  AllowForAlignment: true
+
+Layout/LineLength:
+  Max: 120
+  AllowedPatterns:
+    - '^# [^\n]+'
+
+Layout/HashAlignment:
+  EnforcedColonStyle: key
+  EnforcedHashRocketStyle: table
+
+Layout/MultilineMethodCallIndentation:
+  EnforcedStyle: indented
+
+Layout/SpaceInLambdaLiteral:
+  EnforcedStyle: require_space
+
+Lint/AmbiguousBlockAssociation:
+  Enabled: false
+
+Metrics/AbcSize:
+  Max: 25
+  CountRepeatedAttributes: false
+
+Metrics/MethodLength:
+  Max: 20
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Metrics/ModuleLength:
+  Max: 200
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Metrics/BlockLength:
+  Exclude:
+    - "test/**/*"
+    - "*.gemspec"
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Metrics/ClassLength:
+  Max: 250
+  Exclude:
+    - "test/**/*"
+  CountAsOne:
+    - array
+    - hash
+    - heredoc
+    - method_call
+
+Naming/BlockForwarding:
+  Enabled: false
+
+Naming/PredicateMethod:
+  Enabled: false
+
+Naming/PredicatePrefix:
+  NamePrefix:
+    - is_
+    - have_
+  ForbiddenPrefixes:
+    - is_
+    - have_
+
+Naming/RescuedExceptionsVariableName:
+  PreferredName: error
+
+Style/ConditionalAssignment:
+  EnforcedStyle: assign_inside_condition
+  IncludeTernaryExpressions: false
+
+Style/AccessorGrouping:
+  EnforcedStyle: separated
+
+Style/ArgumentsForwarding:
+  Enabled: false
+
+Style/Documentation:
+  Enabled: false
+
+Style/HashSyntax:
+  EnforcedShorthandSyntax: always
+
+Style/StringLiterals:
+  EnforcedStyle: single_quotes
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: consistent_comma
+
+Style/TrailingCommaInArrayLiteral:
+  EnforcedStyleForMultiline: consistent_comma
