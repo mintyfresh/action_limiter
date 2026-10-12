@@ -17,6 +17,7 @@ module ActionLimiter
   autoload :AutomaticRetries, 'action_limiter/automatic_retries'
   autoload :Bucket, 'action_limiter/bucket'
   autoload :Concurrent, 'action_limiter/concurrent'
+  autoload :GraphQL, 'action_limiter/graphql'
   autoload :Limiter, 'action_limiter/limiter'
   autoload :LockLost, 'action_limiter/lock_lost'
   autoload :MultiWindow, 'action_limiter/multi_window'
