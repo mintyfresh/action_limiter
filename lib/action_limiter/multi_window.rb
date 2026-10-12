@@ -27,6 +27,9 @@ module ActionLimiter
     T::Sig::WithoutRuntime.sig { returns(T::Array[String]) }
     attr_reader :keys
 
+    T::Sig::WithoutRuntime.sig { returns(T.nilable(String)) }
+    attr_reader :routing
+
     T::Sig::WithoutRuntime.sig { returns(Integer) }
     attr_reader :limit
 
@@ -40,8 +43,9 @@ module ActionLimiter
         limit: Integer,
         duration: T.any(Integer, ActiveSupport::Duration),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
-        redis: Redis,
+        redis: Connection,
         retry_options: T::Hash[Symbol, T.untyped],
+        routing: T.nilable(String),
         transform: KeyTransform
       ).void
     end
@@ -52,6 +56,7 @@ module ActionLimiter
       wait_timeout: ActionLimiter.default_wait_timeout,
       redis: ActionLimiter.redis,
       retry_options: {},
+      routing: nil,
       transform: nil
     )
       duration_seconds = whole_seconds(:duration, duration)
@@ -62,7 +67,8 @@ module ActionLimiter
 
       super(wait_timeout:, redis:, retry_options:, transform:)
       @keys = keys
-      @redis_keys = T.let(keys.map { |key| redis_key(key) }, T::Array[String])
+      @routing = routing
+      @redis_keys = T.let(keys.map { |key| redis_key(key, routing:) }, T::Array[String])
       @limit = limit
       @duration = T.let(duration_seconds, Integer)
     end

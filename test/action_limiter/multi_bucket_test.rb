@@ -27,6 +27,17 @@ module ActionLimiter
       redis.get("#{key}:#{now_ms / (interval * 1000)}").to_i
     end
 
+    it 'prefixes every key with the routing hash tag' do
+      MultiBucket.new([user_key, global_key], limit: 2, interval: 60, routing: 'acct').within_limit { nil }
+
+      assert_equal 1, count("{acct}#{user_key}")
+      assert_equal 1, count("{acct}#{global_key}")
+      assert_equal 0, count(user_key)
+    ensure
+      cleanup_pattern("{acct}#{user_key}:*")
+      cleanup_pattern("{acct}#{global_key}:*")
+    end
+
     it 'returns the block result when every key is under the limit' do
       limiter = MultiBucket.new([user_key, global_key], limit: 2, interval: 60)
 
@@ -38,6 +49,43 @@ module ActionLimiter
 
       assert_equal 1, count(user_key)
       assert_equal 1, count(global_key)
+    end
+
+    it 'counts duplicate keys once per operation' do
+      limiter = MultiBucket.new([user_key, user_key], limit: 3, interval: 3600)
+      successes = 0
+
+      3.times do
+        limiter.within_limit { successes += 1 }
+      rescue OverLimit
+        nil
+      end
+
+      assert_equal 3, successes
+      assert_equal 3, count(user_key, interval: 3600)
+      assert_raises(OverLimit) { limiter.within_limit { :result } }
+      assert_equal 3, count(user_key, interval: 3600)
+    end
+
+    it 'counts keys with the same transformed value once per operation' do
+      limiter = MultiBucket.new(
+        [user_key, global_key],
+        limit: 3,
+        interval: 3600,
+        transform: -> (_value) { user_key }
+      )
+      successes = 0
+
+      3.times do
+        limiter.within_limit { successes += 1 }
+      rescue OverLimit
+        nil
+      end
+
+      assert_equal 3, successes
+      assert_equal 3, count(user_key, interval: 3600)
+      assert_raises(OverLimit) { limiter.within_limit { :result } }
+      assert_equal 3, count(user_key, interval: 3600)
     end
 
     it 'rejects the operation without modifying any key when one key is at the limit' do

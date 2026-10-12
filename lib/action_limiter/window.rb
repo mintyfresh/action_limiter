@@ -34,7 +34,7 @@ module ActionLimiter
         limit: Integer,
         duration: T.any(Integer, ActiveSupport::Duration),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
-        redis: Redis,
+        redis: Connection,
         retry_options: T::Hash[Symbol, T.untyped],
         transform: KeyTransform
       ).void

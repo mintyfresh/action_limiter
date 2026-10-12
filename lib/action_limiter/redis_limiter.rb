@@ -18,17 +18,13 @@ module ActionLimiter
     T::Sig::WithoutRuntime.sig { returns(Integer) }
     attr_reader :wait_timeout
 
-    T::Sig::WithoutRuntime.sig { returns(Redis) }
+    T::Sig::WithoutRuntime.sig { returns(Connection) }
     attr_reader :redis
-
-    KeyTransform = T.type_alias do
-      T.nilable(T.any(OpenSSL::Digest, Symbol, String, T.proc.params(value: String).returns(String)))
-    end
 
     sig do
       params(
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
-        redis: Redis,
+        redis: Connection,
         retry_options: T::Hash[Symbol, T.untyped],
         transform: KeyTransform
       ).void
@@ -45,8 +41,15 @@ module ActionLimiter
 
   private
 
+    T::Sig::WithoutRuntime.sig { params(key: String, routing: T.nilable(String)).returns(String) }
+    def redis_key(key, routing: nil)
+      return transform_key(key) if routing.nil?
+
+      "{#{transform_key(routing)}}#{transform_key(key)}"
+    end
+
     T::Sig::WithoutRuntime.sig { params(key: String).returns(String) }
-    def redis_key(key)
+    def transform_key(key)
       case (transform = @transform)
       when nil then key
       when OpenSSL::Digest then OpenSSL::Digest.new(transform.name).hexdigest(key)
@@ -78,10 +81,15 @@ module ActionLimiter
 
         retry_after = retry_after_ms / 1000.0
         remaining = deadline - monotonic_now
-        raise over_limit_error(retry_after) if remaining <= 0
+        raise over_limit_error(retry_after) if remaining <= 0 || (retry_after > remaining && !greedy_wait_timeout?)
 
         sleep([retry_after, remaining].min)
       end
+    end
+
+    T::Sig::WithoutRuntime.sig { overridable.returns(T::Boolean) }
+    def greedy_wait_timeout?
+      false
     end
 
     T::Sig::WithoutRuntime.sig { params(options: T::Hash[Symbol, T.untyped]).void }

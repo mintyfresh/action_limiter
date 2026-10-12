@@ -10,14 +10,14 @@ module ActionLimiter
     end
 
     after do
-      cleanup_keys(held_key, "#{key}:tokens", "#{key}:pending")
+      cleanup_keys(held_key, "{#{key}}:tokens", "{#{key}}:claimed")
     end
 
     sig { returns(String) }
     attr_reader :key
 
     sig { returns(String) }
-    def held_key = "#{key}:held"
+    def held_key = "{#{key}}:held"
 
     it 'yields a held lease' do
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
@@ -78,6 +78,32 @@ module ActionLimiter
 
       assert_equal 1, events.size
       assert_kind_of ::Redis::ConnectionError, T.must(events.first).payload.fetch(:error)
+    end
+
+    it 'reports a release that cannot check out a connection without masking the block error' do
+      pool = ::ConnectionPool.new(size: 1, timeout: 0.1) { ::Redis.new(url: REDIS_URL) }
+      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, redis: pool)
+      checked_out = ::Thread::Queue.new
+      done = ::Thread::Queue.new
+
+      events = capture_events('release_failed.action_limiter') do
+        assert_raises(RuntimeError) do
+          limiter.within_limit do
+            Thread.new do
+              pool.with do
+                checked_out << true
+                done.pop
+              end
+            end
+            checked_out.pop
+            raise 'boom'
+          end
+        end
+      end
+      done << true
+
+      assert_equal 1, events.size
+      assert_kind_of ::ConnectionPool::TimeoutError, T.must(events.first).payload.fetch(:error)
     end
   end
 end

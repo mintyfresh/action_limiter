@@ -28,7 +28,7 @@ module ActionLimiter
 
       assert_equal :result, Unlimited.new.within_limit { :result }
     ensure
-      ActionLimiter.redis = REDIS_URL
+      ActionLimiter.redis = REDIS_CONFIG
     end
 
     it 'emits no instrumentation' do

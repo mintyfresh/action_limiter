@@ -33,7 +33,13 @@ module ActionLimiter
     end
 
     def rate_limit_key
-      "PingResolver:#{Digest::SHA256.hexdigest('global')}:rate_limit"
+      "{#{Digest::SHA256.hexdigest('PingResolver')}}#{Digest::SHA256.hexdigest('PingResolver:global:rate_limit')}"
+    end
+
+    it 'routes and hashes its keys by default' do
+      Schema.execute('{ ping }')
+
+      assert_equal 1, redis.zcard(rate_limit_key)
     end
 
     it 'resolves while under the limit' do

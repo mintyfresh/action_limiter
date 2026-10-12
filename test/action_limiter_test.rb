@@ -6,7 +6,7 @@ require 'test_helper'
 module ActionLimiter
   class ConfigTest < TestCase
     after do
-      ActionLimiter.redis = REDIS_URL
+      ActionLimiter.redis = REDIS_CONFIG
     end
 
     it 'accepts a Redis instance' do
@@ -16,16 +16,46 @@ module ActionLimiter
       assert_same instance, ActionLimiter.redis
     end
 
-    it 'accepts a URL string' do
-      ActionLimiter.redis = 'redis://localhost:6379/14'
+    it 'accepts a ConnectionPool' do
+      pool = ::ConnectionPool.new { ::Redis.new(url: REDIS_URL) }
+      ActionLimiter.redis = pool
 
-      assert_equal 14, ActionLimiter.redis.connection[:db]
+      assert_same pool, ActionLimiter.redis
     end
 
-    it 'accepts a hash of connection options' do
-      ActionLimiter.redis = { host: 'localhost', port: 6379, db: 13 }
+    it 'wraps a URL string in a ConnectionPool' do
+      ActionLimiter.redis = 'redis://localhost:6379/14'
 
-      assert_equal 13, ActionLimiter.redis.connection[:db]
+      assert_kind_of ::ConnectionPool, ActionLimiter.redis
+      assert_equal 14, ActionLimiter.redis.with { |connection| connection.connection[:db] }
+    end
+
+    it 'wraps a hash of connection options in a ConnectionPool sized by its pool entry' do
+      ActionLimiter.redis = { host: 'localhost', port: 6379, db: 13, pool: { size: 2 } }
+
+      assert_kind_of ::ConnectionPool, ActionLimiter.redis
+      assert_equal 2, T.cast(ActionLimiter.redis, ::ConnectionPool).size
+      assert_equal 13, ActionLimiter.redis.with { |connection| connection.connection[:db] }
+    end
+
+    it 'sizes the pool from RAILS_MAX_THREADS when it is set' do
+      original = ENV.fetch('RAILS_MAX_THREADS', nil)
+      ENV['RAILS_MAX_THREADS'] = '7'
+      ActionLimiter.redis = REDIS_URL
+
+      assert_equal 7, T.cast(ActionLimiter.redis, ::ConnectionPool).size
+    ensure
+      ENV['RAILS_MAX_THREADS'] = original
+    end
+
+    it 'prefers an explicit pool size over RAILS_MAX_THREADS' do
+      original = ENV.fetch('RAILS_MAX_THREADS', nil)
+      ENV['RAILS_MAX_THREADS'] = '7'
+      ActionLimiter.redis = { url: REDIS_URL, pool: { size: 2 } }
+
+      assert_equal 2, T.cast(ActionLimiter.redis, ::ConnectionPool).size
+    ensure
+      ENV['RAILS_MAX_THREADS'] = original
     end
 
     it 'exposes default settings' do

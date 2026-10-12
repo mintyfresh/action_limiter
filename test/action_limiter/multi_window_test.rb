@@ -52,6 +52,16 @@ module ActionLimiter
       assert_equal :result, limiter.within_limit { :result }
     end
 
+    it 'prefixes every key with the routing hash tag' do
+      MultiWindow.new([user_key, global_key], limit: 2, duration: 10, routing: 'acct').within_limit { nil }
+
+      assert_equal 1, redis.zcard("{acct}#{user_key}")
+      assert_equal 1, redis.zcard("{acct}#{global_key}")
+      assert_equal 0, redis.exists(user_key, global_key)
+    ensure
+      cleanup_keys("{acct}#{user_key}", "{acct}#{global_key}")
+    end
+
     it 'validates its arguments' do
       assert_raises(ArgumentError) { MultiWindow.new([], limit: 1, duration: 10) }
       assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 0, duration: 10) }

@@ -59,6 +59,23 @@ module ActionLimiter
       assert_equal 'Rate limit exceeded for fake', error.message
     end
 
+    it 'raises immediately when the retry time exceeds the remaining wait' do
+      started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+      error = assert_raises(OverLimit) { FakeLimiter.new([5000, nil], wait_timeout: 1).within_limit { :result } }
+
+      assert_in_delta 5.0, error.retry_after
+      assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :<, 0.1
+    end
+
+    it 'waits out the deadline when the wait timeout is greedy' do
+      limiter = FakeLimiter.new([5000, nil], wait_timeout: 1)
+      limiter.define_singleton_method(:greedy_wait_timeout?) { true }
+      started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+
+      assert_equal :result, limiter.within_limit { :result }
+      assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :>=, 1
+    end
+
     it 'instruments acquire with the time waited' do
       events = capture_events('acquire.action_limiter') do
         FakeLimiter.new([20, nil], wait_timeout: 1).within_limit { nil }

@@ -36,6 +36,7 @@ module ActionLimiter
       sig { params(actual: Numeric).void }
       def points_used(actual)
         raise ArgumentError, 'points_used was already called' if @used
+        raise ArgumentError, 'expected actual to be finite' unless actual.to_f.finite?
         raise ArgumentError, 'expected actual to be non-negative' if actual.negative?
 
         @used = true
@@ -66,7 +67,7 @@ module ActionLimiter
         restore_rate: Numeric,
         default_estimate: T.nilable(Numeric),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
-        redis: Redis,
+        redis: Connection,
         retry_options: T::Hash[Symbol, T.untyped],
         transform: KeyTransform
       ).void
@@ -119,7 +120,9 @@ module ActionLimiter
     # +Handle#points_used+.
     T::Sig::WithoutRuntime.sig { params(delta: Numeric).void }
     def adjust(delta)
-      ADJUST_SCRIPT.call(redis, keys: [@redis_key], argv: [now_ms, capacity, restore_rate, delta])
+      raise ArgumentError, 'expected delta to be finite' unless delta.to_f.finite?
+
+      ADJUST_SCRIPT.call(redis, keys: [@redis_key], argv: [now_ms, capacity, restore_rate, delta.to_f])
     end
 
   private
@@ -130,10 +133,15 @@ module ActionLimiter
         ACQUIRE_SCRIPT.call(
           redis,
           keys: [@redis_key],
-          argv: [now_ms, capacity, restore_rate, estimate]
+          argv: [now_ms, capacity, restore_rate, estimate.to_f]
         )
       )
       wait_ms.zero? ? nil : wait_ms
+    end
+
+    T::Sig::WithoutRuntime.sig { override.returns(T::Boolean) }
+    def greedy_wait_timeout?
+      true
     end
 
     T::Sig::WithoutRuntime.sig { params(estimate: T.untyped).void }

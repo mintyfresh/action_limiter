@@ -10,12 +10,12 @@ gem 'action_limiter'
 
 ## Requirements
 
-Ruby 3.4+ and Redis 6.0+ (Concurrent uses fractional BRPOP timeouts, which need Redis 6.0).
+Ruby 3.4+ and Redis 6.2+ (Concurrent uses BLMOVE, which needs Redis 6.2).
 
 ## Configuration
 
 ```ruby
-ActionLimiter.redis = ENV.fetch('REDIS_URL')     # a URL, a Redis instance, or a Hash of Redis.new options
+ActionLimiter.redis = ENV.fetch('REDIS_URL')     # a URL, a Hash of Redis.new options, a ConnectionPool, or a Redis instance
 ActionLimiter.default_wait_timeout = 0           # seconds to wait for capacity before raising
 ActionLimiter.default_concurrent_lock_ttl = 10   # extra seconds Concurrent keys outlive their locks
 ActionLimiter.default_over_limit_retry_attempts = 20
@@ -29,8 +29,15 @@ config.action_limiter.redis = ENV.fetch('REDIS_URL')
 config.action_limiter.default_wait_timeout = 5
 ```
 
-Every Redis-backed limiter also accepts `redis:` (a Redis instance), `wait_timeout:`, and `retry_options:` keywords.
-Limiters are thread-safe; create global ones once at boot and parametric ones (per user, per account) on demand.
+Every Redis-backed limiter also accepts `redis:` (a ConnectionPool or a Redis instance), `wait_timeout:`, and
+`retry_options:` keywords. Limiters are thread-safe; create global ones once at boot and parametric ones (per user,
+per account) on demand.
+
+A URL or Hash is wrapped in a `ConnectionPool` sized to `RAILS_MAX_THREADS` when it is set, or by an optional `pool:`
+entry in the Hash (`{ url: ..., pool: { size: 10 } }`). The pool must have at least as many connections as threads using limiters: a
+waiting Concurrent caller holds its connection while it blocks, so an undersized pool leaves holders unable to release
+until the waiters time out. A single Redis instance serializes every command, so one blocked Concurrent caller stalls
+every other thread sharing it.
 
 Limiters capture `ActionLimiter.redis` when they are constructed, so configure `ActionLimiter.redis` before defining
 limiter constants.
@@ -82,6 +89,11 @@ limiter = ActionLimiter::MultiBucket.new(
 )
 limiter.within_limit { authenticate(params[:email], params[:password]) }
 ```
+
+On Redis Cluster, a MultiWindow or MultiBucket's keys must share a hash slot. Pass `routing:` to prefix every key
+with a `{routing}` hash tag (transformed like the keys). The tag becomes part of each key, so use the dimension the keys
+share: route `["user:#{user.id}", 'provider']` by `'provider'`, not by the user, or each user gets its own copy of the
+provider counter. Changing `routing` on an existing limiter starts fresh counters.
 
 ### Concurrent: at most N at once
 
@@ -188,6 +200,11 @@ end
 ```
 
 Over the limit, the field returns a `GraphQL::ExecutionError` with `extensions: { code: 'RATE_LIMIT' }`.
+
+Keys are scoped to the resolver's `graphql_name`, routed by it, and hashed with SHA-256. Override
+`default_rate_limiter_keys`, `default_rate_limiter_scope`, `default_rate_limiter_routing`,
+`default_rate_limiter_transform`, or `default_rate_limiter_redis` to change those defaults, or `rate_limiter` to build a
+different limiter.
 
 ## Instrumentation
 

@@ -8,7 +8,7 @@ require 'action_limiter/railtie'
 module ActionLimiter
   class RailtieTest < TestCase
     after do
-      ActionLimiter.redis = REDIS_URL
+      ActionLimiter.redis = REDIS_CONFIG
       ActionLimiter.default_wait_timeout = 0
       ActionLimiter.default_concurrent_lock_ttl = 10
       ActionLimiter.default_over_limit_retry_attempts = 20
@@ -34,7 +34,7 @@ module ActionLimiter
         default_over_limit_retry_attempts: 3
       )
 
-      assert_equal 14, ActionLimiter.redis.connection[:db]
+      assert_equal 14, ActionLimiter.redis.with { |connection| connection.connection[:db] }
       assert_equal 5, ActionLimiter.default_wait_timeout
       assert_equal 30, ActionLimiter.default_concurrent_lock_ttl
       assert_equal 3, ActionLimiter.default_over_limit_retry_attempts

@@ -21,14 +21,16 @@ module ActionLimiter
     end
 
     T::Sig::WithoutRuntime.sig do
-      params(redis: Redis, keys: T::Array[String], argv: T::Array[T.any(String, Numeric)]).returns(T.untyped)
+      params(redis: Connection, keys: T::Array[String], argv: T::Array[T.any(String, Numeric)]).returns(T.untyped)
     end
     def call(redis, keys:, argv:)
-      redis.evalsha(sha, keys:, argv:)
-    rescue Redis::NoScriptError, RedisClient::NoScriptError
-      # Script might've been evicted from the script cache, reload it
-      redis.script(:load, source)
-      redis.evalsha(sha, keys:, argv:)
+      redis.with do |connection|
+        connection.evalsha(sha, keys:, argv:)
+      rescue Redis::NoScriptError, RedisClient::NoScriptError
+        # Script might've been evicted from the script cache, reload it
+        connection.script(:load, source)
+        connection.evalsha(sha, keys:, argv:)
+      end
     end
   end
 end

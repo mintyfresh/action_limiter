@@ -1,6 +1,7 @@
 # typed: strict
 # frozen_string_literal: true
 
+require 'bigdecimal'
 require 'test_helper'
 
 module ActionLimiter
@@ -119,6 +120,63 @@ module ActionLimiter
         handle.points_used(5)
         assert_raises(ArgumentError) { handle.points_used(5) }
       end
+    end
+
+    it 'keeps waiting when a refund may restore points before the retry time' do
+      limiter = Points.new(key, capacity: 10, restore_rate: 0.001, wait_timeout: 1)
+      holder = Thread.new do
+        limiter.within_limit(estimate: 10) do |handle|
+          sleep(0.3)
+          handle.points_used(0)
+        end
+      end
+      sleep(0.1)
+
+      assert_equal :result, limiter.within_limit(estimate: 5) { :result }
+      holder.join
+    end
+
+    it 'accepts a Rational estimate' do
+      limiter = Points.new(key, capacity: 10, restore_rate: 0.001)
+
+      assert_equal :result, limiter.within_limit(estimate: 5/2r) { :result }
+      assert_in_delta 7.5, balance, 0.01
+    end
+
+    it 'accepts a BigDecimal actual cost' do
+      limiter = Points.new(key, capacity: 10, restore_rate: 0.001)
+      limiter.within_limit(estimate: 5) { |handle| handle.points_used(BigDecimal('1.5')) }
+
+      assert_in_delta 8.5, balance, 0.01
+    end
+
+    it 'rejects non-finite actual costs without adjusting the balance or consuming the handle' do
+      [Float::NAN, Float::INFINITY, -Float::INFINITY].each do |actual|
+        cleanup_keys(key)
+        limiter = Points.new(key, capacity: 10, restore_rate: 1)
+
+        limiter.within_limit(estimate: 5) do |handle|
+          state = redis.hgetall(key)
+
+          assert_raises(ArgumentError) { handle.points_used(actual) }
+          assert_equal state, redis.hgetall(key)
+          handle.points_used(0)
+        end
+
+        assert_in_delta 10, balance, 0.001
+      end
+    end
+
+    it 'rejects non-finite adjustments without changing the balance' do
+      limiter = Points.new(key, capacity: 10, restore_rate: 1)
+      limiter.within_limit(estimate: 5) { nil }
+      state = redis.hgetall(key)
+
+      [Float::NAN, Float::INFINITY, -Float::INFINITY].each do |delta|
+        assert_raises(ArgumentError) { limiter.adjust(delta) }
+      end
+
+      assert_equal state, redis.hgetall(key)
     end
 
     it 'validates the estimate before touching Redis' do

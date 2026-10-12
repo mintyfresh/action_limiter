@@ -11,7 +11,7 @@ module ActionLimiter
     end
 
     after do
-      @written.each { |prefix| cleanup_pattern("#{prefix}*") }
+      @written.each { |prefix| cleanup_pattern("*#{prefix}*") }
     end
 
     sig { returns(String) }
@@ -55,6 +55,14 @@ module ActionLimiter
       assert_equal 1, redis.exists(track("#{key}:custom"))
     end
 
+    it 'transforms the routing hash tag along with the keys' do
+      routing = "#{key}:routing"
+      MultiWindow.new([key], limit: 1, duration: 10, routing:, transform: :sha256).within_limit { nil }
+
+      assert_equal 1, redis.exists("{#{hexdigest('SHA256', routing)}}#{hexdigest('SHA256', key)}")
+      assert_empty redis.keys("*#{track(routing)}*")
+    end
+
     it 'stores the raw key without a transform' do
       Window.new(key, limit: 1, duration: 10).within_limit { nil }
 
@@ -81,8 +89,8 @@ module ActionLimiter
         limiter_key = "#{key}:#{name}"
         build.call(limiter_key).within_limit { nil }
 
-        refute_empty redis.keys("#{hexdigest('SHA256', limiter_key)}*"), "#{name} did not write the digest"
-        assert_empty redis.keys("#{track(limiter_key)}*"), "#{name} wrote the raw key"
+        refute_empty redis.keys("*#{hexdigest('SHA256', limiter_key)}*"), "#{name} did not write the digest"
+        assert_empty redis.keys("*#{track(limiter_key)}*"), "#{name} wrote the raw key"
       end
     end
   end

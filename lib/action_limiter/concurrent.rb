@@ -19,15 +19,15 @@ module ActionLimiter
   #
   # == Data model
   #
-  # * +key:tokens+ — a List with one entry per available slot.
-  # * +key:held+ — a Sorted Set of acquisition IDs scored by their expiry timestamp.
-  # * +key:pending+ — a Sorted Set of waiters blocked on +BRPOP+, scored by expiry. A token a
-  #   waiter has popped but not yet recorded as held is accounted for here.
+  # * +{key}:tokens+ — a List with one entry per available slot.
+  # * +{key}:held+ — a Sorted Set of acquisition IDs scored by their expiry timestamp.
+  # * +{key}:claimed+ — a List of tokens a waiter has moved out of the pool with +BLMOVE+ but not
+  #   yet recorded as held. Tokens are valued by the time they were pushed.
   #
   # == Performance
   #
   # The fast path (token available) is a single +EVALSHA+ round-trip. When the pool is empty,
-  # +BRPOP+ blocks server-side until a token is released, on its own short-lived connection.
+  # +BLMOVE+ blocks server-side until a token is released.
   class Concurrent < RedisLimiter
     extend T::Sig
 
@@ -62,12 +62,11 @@ module ActionLimiter
       end
     end
 
-    # How long a waiter's pending entry outlives its wait, covering the BRPOP round-trip
-    PENDING_GRACE_MS = 5_000
+    # How long a claimed token may go unrecorded before it is treated as lost and restored
+    CLAIM_GRACE_MS = 5_000
 
-    INIT_SCRIPT = Script.new('concurrent_init')
     ACQUIRE_SCRIPT = Script.new('concurrent_acquire')
-    BRPOP_ACQUIRE_SCRIPT = Script.new('concurrent_brpop_acquire')
+    CLAIM_SCRIPT = Script.new('concurrent_claim')
     RELEASE_SCRIPT = Script.new('concurrent_release')
     RENEW_SCRIPT = Script.new('concurrent_renew')
 
@@ -88,7 +87,7 @@ module ActionLimiter
         lock_timeout: T.any(Integer, ActiveSupport::Duration),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         ttl: T.any(Integer, ActiveSupport::Duration),
-        redis: Redis,
+        redis: Connection,
         retry_options: T::Hash[Symbol, T.untyped],
         transform: KeyTransform
       ).void
@@ -108,16 +107,15 @@ module ActionLimiter
 
       raise ArgumentError, 'expected limit to be positive' if limit <= 0
       raise ArgumentError, 'expected lock_timeout to be positive' if lock_seconds <= 0
+      raise ArgumentError, 'expected ttl to be non-negative' if ttl_seconds.negative?
 
       super(wait_timeout:, redis:, retry_options:, transform:)
       @key = key
       @limit = limit
       @lock_timeout = T.let(lock_seconds, Integer)
       base_key = redis_key(key)
-      @keys = T.let(["#{base_key}:tokens", "#{base_key}:held", "#{base_key}:pending"], T::Array[String])
+      @keys = T.let(["{#{base_key}}:tokens", "{#{base_key}}:held", "{#{base_key}}:claimed"], T::Array[String])
       @key_ttl = T.let(@lock_timeout + self.wait_timeout + ttl_seconds, Integer)
-
-      INIT_SCRIPT.call(redis, keys: @keys, argv: [limit, now_ms, @key_ttl])
     end
 
     sig { override.returns(String) }
@@ -155,7 +153,7 @@ module ActionLimiter
     # Whether a lock is still held. Prefer +Lease#held?+.
     T::Sig::WithoutRuntime.sig { params(acquisition_id: String).returns(T::Boolean) }
     def held?(acquisition_id)
-      !redis.zscore(held_key, acquisition_id).nil?
+      !redis.with { |connection| connection.zscore(held_key, acquisition_id) }.nil?
     end
 
   private
@@ -167,28 +165,31 @@ module ActionLimiter
       deadline = started_at + wait_timeout
 
       loop do
+        retry_after_ms = try_acquire(acquisition_id)
+        return acquired(acquisition_id, started_at) if retry_after_ms.nil?
+
         remaining = deadline - monotonic_now
-        return acquired(acquisition_id, started_at) if try_acquire(acquisition_id, remaining)
         raise over_limit_error(lock_timeout.to_f) if remaining <= 0
 
-        if blocking_pop(remaining)
-          BRPOP_ACQUIRE_SCRIPT.call(redis, keys: @keys, argv: [now_ms, lock_timeout * 1000, acquisition_id, @key_ttl])
-          return acquired(acquisition_id, started_at)
-        end
-
-        redis.zrem(pending_key, acquisition_id)
+        token = blocking_move([remaining, retry_after_ms / 1000.0].min)
+        return acquired(acquisition_id, started_at) if token && claim(acquisition_id, token)
       end
     end
 
-    # Runs the acquire script; when +remaining+ wait time is left, a failed attempt also
-    # registers the caller as a pending waiter
-    T::Sig::WithoutRuntime.sig { params(acquisition_id: String, remaining: Float).returns(T::Boolean) }
-    def try_acquire(acquisition_id, remaining)
-      now = now_ms
-      pending_expiry_ms = remaining.positive? ? now + (remaining * 1000).ceil + PENDING_GRACE_MS : 0
-      argv = [now, lock_timeout * 1000, acquisition_id, @key_ttl, limit, pending_expiry_ms]
+    # Returns nil on success, or the ms until a held lock expires or a claim goes stale
+    T::Sig::WithoutRuntime.sig { params(acquisition_id: String).returns(T.nilable(Integer)) }
+    def try_acquire(acquisition_id)
+      argv = [now_ms, lock_timeout * 1000, acquisition_id, @key_ttl, limit, CLAIM_GRACE_MS]
 
-      ACQUIRE_SCRIPT.call(redis, keys: @keys, argv:) ? true : false
+      result = Integer(ACQUIRE_SCRIPT.call(redis, keys: @keys, argv:))
+      result.positive? ? nil : -result
+    end
+
+    T::Sig::WithoutRuntime.sig { params(acquisition_id: String, token: String).returns(T::Boolean) }
+    def claim(acquisition_id, token)
+      argv = [now_ms, lock_timeout * 1000, acquisition_id, @key_ttl, token]
+
+      CLAIM_SCRIPT.call(redis, keys: @keys, argv:) ? true : false
     end
 
     T::Sig::WithoutRuntime.sig { params(acquisition_id: String, started_at: Float).returns(String) }
@@ -197,18 +198,13 @@ module ActionLimiter
       acquisition_id
     end
 
-    # BRPOP runs on its own short-lived connection: redis-rb serialises commands on a shared
-    # client, so blocking on it would stall every other thread using that client. The timeout
-    # is clamped to 1ms because a BRPOP timeout of 0 blocks forever.
-    T::Sig::WithoutRuntime.sig { params(timeout: Float).returns(T.nilable(T::Array[String])) }
-    def blocking_pop(timeout)
+    # The timeout is clamped to 1ms because a BLMOVE timeout of 0 blocks forever.
+    T::Sig::WithoutRuntime.sig { params(timeout: Float).returns(T.nilable(String)) }
+    def blocking_move(timeout)
       timeout = [timeout, 0.001].max.round(3)
-      connection = redis._client.config.new_client
 
-      begin
-        connection.blocking_call_v(timeout, ['BRPOP', tokens_key, timeout])
-      ensure
-        connection.close
+      redis.with do |connection|
+        connection.blmove(tokens_key, claimed_key, 'RIGHT', 'LEFT', timeout:)
       end
     end
 
@@ -216,8 +212,8 @@ module ActionLimiter
     # swallowed. The lock then expires through +lock_timeout+.
     T::Sig::WithoutRuntime.sig { params(acquisition_id: String).void }
     def release(acquisition_id)
-      RELEASE_SCRIPT.call(redis, keys: @keys, argv: [acquisition_id, @key_ttl, limit])
-    rescue Redis::BaseError => error
+      RELEASE_SCRIPT.call(redis, keys: @keys, argv: [acquisition_id, @key_ttl, limit, now_ms])
+    rescue Redis::BaseError, ConnectionPool::TimeoutError => error
       instrument(:release_failed, error:)
     end
 
@@ -232,7 +228,7 @@ module ActionLimiter
     end
 
     T::Sig::WithoutRuntime.sig { returns(String) }
-    def pending_key
+    def claimed_key
       T.must(@keys[2])
     end
   end

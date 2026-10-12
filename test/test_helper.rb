@@ -11,10 +11,12 @@ module ActionLimiter
     extend T::Sig
 
     REDIS_URL = T.let(ENV.fetch('REDIS_URL', 'redis://localhost:6379/15'), String)
+    REDIS_CONFIG = T.let({ url: REDIS_URL, pool: { size: 25 } }.freeze, T::Hash[Symbol, T.untyped])
+    REDIS = ::Redis.new(url: REDIS_URL)
 
     sig { returns(::Redis) }
     def redis
-      ActionLimiter.redis
+      REDIS
     end
 
     sig { params(keys: String).void }
@@ -43,4 +45,4 @@ module ActionLimiter
   end
 end
 
-ActionLimiter.redis = ActionLimiter::TestCase::REDIS_URL
+ActionLimiter.redis = ActionLimiter::TestCase::REDIS_CONFIG

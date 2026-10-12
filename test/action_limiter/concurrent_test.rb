@@ -10,20 +10,20 @@ module ActionLimiter
     end
 
     after do
-      cleanup_keys(tokens_key, held_key, pending_key)
+      cleanup_keys(tokens_key, held_key, claimed_key)
     end
 
     sig { returns(String) }
     attr_reader :key
 
     sig { returns(String) }
-    def tokens_key = "#{key}:tokens"
+    def tokens_key = "{#{key}}:tokens"
 
     sig { returns(String) }
-    def held_key = "#{key}:held"
+    def held_key = "{#{key}}:held"
 
     sig { returns(String) }
-    def pending_key = "#{key}:pending"
+    def claimed_key = "{#{key}}:claimed"
 
     # Simulates another process holding the only token until +expiry_ms+
     sig { params(expiry_ms: Integer).void }
@@ -97,9 +97,15 @@ module ActionLimiter
       assert_equal 3, redis.llen(tokens_key)
     end
 
-    it 'does not add extra tokens on re-initialization' do
-      Concurrent.new(key, limit: 3, lock_timeout: 10)
-      Concurrent.new(key, limit: 3, lock_timeout: 10)
+    it 'does not touch Redis until the limiter is used' do
+      Concurrent.new(key, limit: 3, lock_timeout: 10, redis: ::Redis.new(url: 'redis://localhost:1'))
+
+      assert_equal 0, redis.exists(tokens_key, held_key, claimed_key)
+    end
+
+    it 'does not add extra tokens when several instances share a key' do
+      Concurrent.new(key, limit: 3, lock_timeout: 10).within_limit { nil }
+      Concurrent.new(key, limit: 3, lock_timeout: 10).within_limit { nil }
 
       assert_equal 3, redis.llen(tokens_key)
     end
@@ -121,18 +127,18 @@ module ActionLimiter
       holder.join
 
       assert_equal 1, redis.llen(tokens_key)
-      assert_equal 0, redis.zcard(pending_key)
+      assert_equal 0, redis.llen(claimed_key)
     end
 
-    it 'removes its pending entry when the wait times out' do
+    it 'leaves no claim behind when the wait times out' do
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, wait_timeout: 1)
       occupy_token
 
       assert_raises(OverLimit) { limiter.within_limit { nil } }
-      assert_equal 0, redis.zcard(pending_key)
+      assert_equal 0, redis.llen(claimed_key)
     end
 
-    it 'does not block other threads sharing the Redis client while waiting' do
+    it 'does not block other threads sharing the connection pool while waiting' do
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, wait_timeout: 1)
       occupy_token
       waiter = Thread.new do
@@ -143,20 +149,32 @@ module ActionLimiter
       sleep(0.1)
 
       started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
-      redis.ping
+      ActionLimiter.redis.with(&:ping)
 
       assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :<, 0.2
       waiter.join
     end
 
-    it 'never blocks indefinitely when BRPOP is given a zero timeout' do
-      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
+    it 'waits on a pooled connection instead of opening a new one' do
+      pool = ::ConnectionPool.new(size: 1) { ::Redis.new(url: REDIS_URL) }
+      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, wait_timeout: 1, redis: pool)
+      occupy_token
+      assert_raises(OverLimit) { limiter.within_limit { nil } }
+      connections = -> { redis.info('stats').fetch('total_connections_received').to_i }
+      before = connections.call
+
+      assert_raises(OverLimit) { limiter.within_limit { nil } }
+      assert_equal before, connections.call
+    end
+
+    it 'raises OverLimit once wait_timeout elapses instead of blocking indefinitely' do
+      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, wait_timeout: 1)
       occupy_token
 
       started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
 
-      assert_nil limiter.send(:blocking_pop, 0.0)
-      assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :<, 0.5
+      assert_raises(OverLimit) { limiter.within_limit { nil } }
+      assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :<, 1.5
     end
 
     it 'self-heals a token lost with no waiter in flight' do
@@ -166,28 +184,48 @@ module ActionLimiter
       assert_equal :healed, limiter.within_limit { :healed }
     end
 
-    it 'does not mint a token while a live waiter holds one in flight' do
+    it 'does not mint a token while a live claim holds one' do
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
-      # The waiter has BRPOP'd the only token but not yet run BRPOP_ACQUIRE
       redis.lpop(tokens_key)
-      redis.zadd(pending_key, now_ms + 10_000, 'waiter')
+      redis.rpush(claimed_key, now_ms.to_s)
 
       assert_raises(OverLimit) { limiter.within_limit { :admitted } }
       assert_equal 0, redis.llen(tokens_key)
     end
 
-    it 'heals the token of a waiter that crashed in flight once its pending entry expires' do
+    it 'restores the token of a stale claim' do
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
       redis.lpop(tokens_key)
-      redis.zadd(pending_key, now_ms - 1, 'crashed-waiter')
+      redis.rpush(claimed_key, (now_ms - Concurrent::CLAIM_GRACE_MS - 1).to_s)
 
       assert_equal :healed, limiter.within_limit { :healed }
-      assert_equal 0, redis.zcard(pending_key)
+      assert_equal 0, redis.llen(claimed_key)
+    end
+
+    it 'restores a lost token while another caller is waiting' do
+      limiter = Concurrent.new(key, limit: 2, lock_timeout: 30, wait_timeout: 5)
+      occupy_token(expiry_ms: now_ms + 30_000)
+      redis.lpop(tokens_key)
+      redis.rpush(claimed_key, (now_ms - Concurrent::CLAIM_GRACE_MS + 500).to_s)
+      started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+
+      assert_equal :healed, limiter.within_limit { :healed }
+      assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :<, 1.5
+    end
+
+    it 'admits a waiter once an abandoned lock expires instead of waiting out wait_timeout' do
+      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, wait_timeout: 5)
+      occupy_token(expiry_ms: now_ms + 500)
+      started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+
+      assert_equal :result, limiter.within_limit { :result }
+      assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :<, 1.5
     end
 
     it 'trims surplus tokens when the limit is lowered' do
-      Concurrent.new(key, limit: 5, lock_timeout: 10)
+      Concurrent.new(key, limit: 5, lock_timeout: 10).within_limit { nil }
       limiter = Concurrent.new(key, limit: 2, lock_timeout: 10, wait_timeout: 5)
+      limiter.within_limit { nil }
 
       assert_equal 2, redis.llen(tokens_key)
 
@@ -203,31 +241,12 @@ module ActionLimiter
       assert_equal 1, redis.llen(tokens_key)
     end
 
-    it 'reclaims a token minted for an in-flight waiter whose pending entry expired' do
-      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
-      # The waiter popped the only token, then its pending entry was pruned (clock skew)
-      redis.lpop(tokens_key)
-      redis.zadd(pending_key, now_ms - 1, 'waiter')
-
-      limiter.within_limit do
-        Concurrent::BRPOP_ACQUIRE_SCRIPT.call(
-          redis, keys: [tokens_key, held_key, pending_key], argv: [now_ms, 10_000, 'waiter', 30]
-        )
-      end
-
-      assert_equal 0, redis.llen(tokens_key)
-
-      limiter.send(:release, 'waiter')
-
-      assert_equal 1, redis.llen(tokens_key)
-    end
-
     it 'never exceeds the limit under contention and settles back to the limit' do
       limiter = Concurrent.new(key, limit: 3, lock_timeout: 10, wait_timeout: 5)
 
       assert_operator peak_concurrency(limiter, threads: 20, iterations: 5, hold: 0.01), :<=, 3
       assert_equal 3, redis.llen(tokens_key)
-      assert_equal 0, redis.zcard(pending_key)
+      assert_equal 0, redis.llen(claimed_key)
     end
 
     it 'instruments acquire and over_limit' do
@@ -245,6 +264,7 @@ module ActionLimiter
     it 'validates its arguments' do
       assert_raises(ArgumentError) { Concurrent.new(key, limit: 0, lock_timeout: 10) }
       assert_raises(ArgumentError) { Concurrent.new(key, limit: 1, lock_timeout: 0) }
+      assert_raises(ArgumentError) { Concurrent.new(key, limit: 1, lock_timeout: 10, ttl: -1) }
     end
 
     it 'rejects sub-second lock_timeout and ttl instead of truncating them' do
