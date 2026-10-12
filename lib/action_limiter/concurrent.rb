@@ -31,6 +31,37 @@ module ActionLimiter
   class Concurrent < RedisLimiter
     extend T::Sig
 
+    # A held slot, yielded to +within_limit+ blocks. Long-running holders call +renew+ to
+    # extend the lock beyond +lock_timeout+:
+    #
+    #     LIMIT.within_limit do |lease|
+    #       stream.each_chunk { |chunk| write(chunk); lease.renew }
+    #     end
+    class Lease
+      extend T::Sig
+
+      sig { returns(String) }
+      attr_reader :acquisition_id
+
+      sig { params(limiter: Concurrent, acquisition_id: String).void }
+      def initialize(limiter, acquisition_id)
+        @limiter = limiter
+        @acquisition_id = acquisition_id
+      end
+
+      # Extends the lock to +lock_timeout+ from now. Raises +ActionLimiter::LockLost+ if the lock
+      # has already been reclaimed.
+      sig { void }
+      def renew
+        @limiter.renew(acquisition_id)
+      end
+
+      sig { returns(T::Boolean) }
+      def held?
+        @limiter.held?(acquisition_id)
+      end
+    end
+
     # How long a waiter's pending entry outlives its wait, covering the BRPOP round-trip
     PENDING_GRACE_MS = 5_000
 
@@ -38,6 +69,7 @@ module ActionLimiter
     ACQUIRE_SCRIPT = Script.new('concurrent_acquire')
     BRPOP_ACQUIRE_SCRIPT = Script.new('concurrent_brpop_acquire')
     RELEASE_SCRIPT = Script.new('concurrent_release')
+    RENEW_SCRIPT = Script.new('concurrent_renew')
 
     T::Sig::WithoutRuntime.sig { returns(String) }
     attr_reader :key
@@ -98,10 +130,26 @@ module ActionLimiter
       acquisition_id = acquire
 
       begin
-        yield(nil)
+        yield(Lease.new(self, acquisition_id))
       ensure
         release(acquisition_id)
       end
+    end
+
+    # Extends a held lock. Prefer +Lease#renew+.
+    T::Sig::WithoutRuntime.sig { params(acquisition_id: String).void }
+    def renew(acquisition_id)
+      argv = [now_ms, lock_timeout * 1000, acquisition_id, @key_ttl]
+      return if RENEW_SCRIPT.call(redis, keys: @keys, argv:)
+
+      instrument(:lock_lost)
+      raise LockLost, self
+    end
+
+    # Whether a lock is still held. Prefer +Lease#held?+.
+    T::Sig::WithoutRuntime.sig { params(acquisition_id: String).returns(T::Boolean) }
+    def held?(acquisition_id)
+      !redis.zscore(held_key, acquisition_id).nil?
     end
 
   private
@@ -158,9 +206,13 @@ module ActionLimiter
       end
     end
 
+    # A failed release must not mask an exception raised by the block, so it is reported and
+    # swallowed. The lock then expires through +lock_timeout+.
     T::Sig::WithoutRuntime.sig { params(acquisition_id: String).void }
     def release(acquisition_id)
       RELEASE_SCRIPT.call(redis, keys: @keys, argv: [acquisition_id, @key_ttl])
+    rescue Redis::BaseError => error
+      instrument(:release_failed, error:)
     end
 
     T::Sig::WithoutRuntime.sig { returns(String) }
