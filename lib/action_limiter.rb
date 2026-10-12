@@ -20,6 +20,7 @@ module ActionLimiter
   autoload :LockLost, 'action_limiter/lock_lost'
   autoload :MultiWindow, 'action_limiter/multi_window'
   autoload :OverLimit, 'action_limiter/over_limit'
+  autoload :Points, 'action_limiter/points'
   autoload :RedisLimiter, 'action_limiter/redis_limiter'
   autoload :Script, 'action_limiter/script'
   autoload :Window, 'action_limiter/window'
