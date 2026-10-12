@@ -44,6 +44,7 @@ module ActionLimiter
 
     it 'sleeps for the reported retry time and tries again' do
       started_at = ::Process.clock_gettime(::Process::CLOCK_MONOTONIC)
+
       assert_equal :result, FakeLimiter.new([50, nil], wait_timeout: 1).within_limit { :result }
       assert_operator ::Process.clock_gettime(::Process::CLOCK_MONOTONIC) - started_at, :>=, 0.05
     end

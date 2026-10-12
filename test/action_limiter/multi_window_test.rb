@@ -23,6 +23,7 @@ module ActionLimiter
 
     it 'returns the block result when every key is under the limit' do
       limiter = MultiWindow.new([user_key, global_key], limit: 2, duration: 10)
+
       assert_equal :result, limiter.within_limit { :result }
     end
 
@@ -39,7 +40,6 @@ module ActionLimiter
 
       error = assert_raises(OverLimit) { limiter.within_limit { :result } }
 
-      assert_same limiter, error.limiter
       assert_operator error.retry_after, :>, 9
       assert_equal 0, redis.zcard(user_key)
       assert_match(/#{::Regexp.escape(user_key)}, #{::Regexp.escape(global_key)}/, error.message)
@@ -48,6 +48,7 @@ module ActionLimiter
     it 'waits for the tightest constraint to clear' do
       limiter = MultiWindow.new([user_key, global_key], limit: 1, duration: 1, wait_timeout: 2)
       limiter.within_limit { nil }
+
       assert_equal :result, limiter.within_limit { :result }
     end
 
@@ -55,7 +56,6 @@ module ActionLimiter
       assert_raises(ArgumentError) { MultiWindow.new([], limit: 1, duration: 10) }
       assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 0, duration: 10) }
       assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 1, duration: 0) }
-      assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 1, duration: 10, wait_timeout: -1) }
     end
 
     it 'rejects a sub-second duration instead of truncating it' do

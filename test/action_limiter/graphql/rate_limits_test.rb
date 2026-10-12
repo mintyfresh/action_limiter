@@ -38,6 +38,7 @@ module ActionLimiter
 
     it 'resolves while under the limit' do
       result = Schema.execute('{ ping }')
+
       assert_equal 'pong', result.to_h.dig('data', 'ping')
     end
 
@@ -46,6 +47,7 @@ module ActionLimiter
       result = Schema.execute('{ ping }')
 
       error = result.to_h['errors'].first
+
       assert_equal 'Rate limit exceeded', error['message']
       assert_equal 'RATE_LIMIT', error.dig('extensions', 'code')
     end

@@ -13,7 +13,8 @@ module ActionLimiter
       Unlimited.new.within_limit(estimate: 500) do |handle|
         handle.renew
         handle.points_used(1_000)
-        assert handle.held?
+
+        assert_predicate handle, :held?
       end
     end
 
@@ -24,6 +25,7 @@ module ActionLimiter
 
     it 'never touches Redis' do
       ActionLimiter.redis = 'redis://localhost:1/0'
+
       assert_equal :result, Unlimited.new.within_limit { :result }
     ensure
       ActionLimiter.redis = REDIS_URL
@@ -31,6 +33,7 @@ module ActionLimiter
 
     it 'emits no instrumentation' do
       events = capture_events('acquire.action_limiter') { Unlimited.new.within_limit { nil } }
+
       assert_empty events
     end
   end

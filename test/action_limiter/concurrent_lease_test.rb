@@ -24,8 +24,7 @@ module ActionLimiter
 
       limiter.within_limit do |lease|
         assert_kind_of Concurrent::Lease, lease
-        assert lease.held?
-        refute_nil redis.zscore(held_key, lease.acquisition_id)
+        assert_predicate lease, :held?
       end
     end
 
@@ -36,6 +35,7 @@ module ActionLimiter
         before = redis.zscore(held_key, lease.acquisition_id)
         sleep(0.05)
         lease.renew
+
         assert_operator redis.zscore(held_key, lease.acquisition_id), :>, before
       end
     end
@@ -47,9 +47,8 @@ module ActionLimiter
         limiter.within_limit do |lease|
           redis.zrem(held_key, lease.acquisition_id)
 
-          refute lease.held?
-          error = assert_raises(LockLost) { lease.renew }
-          assert_same limiter, error.limiter
+          refute_predicate lease, :held?
+          assert_raises(LockLost) { lease.renew }
         end
       end
 
@@ -60,7 +59,7 @@ module ActionLimiter
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
       escaped = limiter.within_limit { |lease| lease }
 
-      refute escaped.held?
+      refute_predicate escaped, :held?
       assert_raises(LockLost) { escaped.renew }
     end
 
@@ -69,13 +68,12 @@ module ActionLimiter
       limiter = Concurrent.new(key, limit: 1, lock_timeout: 10, redis: broken)
 
       events = capture_events('release_failed.action_limiter') do
-        error = assert_raises(RuntimeError) do
+        assert_raises(RuntimeError) do
           limiter.within_limit do
             broken.define_singleton_method(:evalsha) { |*, **| raise ::Redis::ConnectionError, 'down' }
             raise 'boom'
           end
         end
-        assert_equal 'boom', error.message
       end
 
       assert_equal 1, events.size

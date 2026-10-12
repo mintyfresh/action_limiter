@@ -1,4 +1,5 @@
 plugins:
+  - rubocop-minitest
   - rubocop-performance
   - rubocop-sorbet
 
@@ -77,6 +78,9 @@ Metrics/ClassLength:
     - hash
     - heredoc
     - method_call
+
+Minitest/MultipleAssertions:
+  Max: 5
 
 Naming/BlockForwarding:
   Enabled: false

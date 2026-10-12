@@ -42,6 +42,7 @@ module ActionLimiter
       LimitedJob.new.perform_now
 
       delay = enqueued_jobs.last.fetch(:at) - Time.now.to_f
+
       assert_equal 1, enqueued_jobs.size
       assert_operator delay, :>=, 2 + 300 - 1
       assert_operator delay, :<=, 2 + 300 + 30 + 1

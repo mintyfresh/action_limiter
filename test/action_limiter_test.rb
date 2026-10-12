@@ -12,16 +12,19 @@ module ActionLimiter
     it 'accepts a Redis instance' do
       instance = ::Redis.new(url: REDIS_URL)
       ActionLimiter.redis = instance
+
       assert_same instance, ActionLimiter.redis
     end
 
     it 'accepts a URL string' do
       ActionLimiter.redis = 'redis://localhost:6379/14'
+
       assert_equal 14, ActionLimiter.redis.connection[:db]
     end
 
     it 'accepts a hash of connection options' do
       ActionLimiter.redis = { host: 'localhost', port: 6379, db: 13 }
+
       assert_equal 13, ActionLimiter.redis.connection[:db]
     end
 
