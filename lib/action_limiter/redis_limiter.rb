@@ -21,23 +21,39 @@ module ActionLimiter
     T::Sig::WithoutRuntime.sig { returns(Redis) }
     attr_reader :redis
 
+    KeyTransform = T.type_alias do
+      T.nilable(T.any(OpenSSL::Digest, Symbol, String, T.proc.params(value: String).returns(String)))
+    end
+
     sig do
       params(
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         redis: Redis,
-        retry_options: T::Hash[Symbol, T.untyped]
+        retry_options: T::Hash[Symbol, T.untyped],
+        transform: KeyTransform
       ).void
     end
-    def initialize(wait_timeout:, redis:, retry_options:)
+    def initialize(wait_timeout:, redis:, retry_options:, transform: nil)
       wait_seconds = whole_seconds(:wait_timeout, wait_timeout)
       raise ArgumentError, 'expected wait_timeout to be non-negative' if wait_seconds.negative?
 
       super(retry_options:)
       @wait_timeout = T.let(wait_seconds, Integer)
       @redis = redis
+      @transform = transform
     end
 
   private
+
+    T::Sig::WithoutRuntime.sig { params(key: String).returns(String) }
+    def redis_key(key)
+      case (transform = @transform)
+      when nil then key
+      when OpenSSL::Digest then OpenSSL::Digest.new(transform.name).hexdigest(key)
+      when Symbol, String then OpenSSL::Digest.new(transform.to_s).hexdigest(key)
+      else transform.call(key)
+      end
+    end
 
     # Converts a duration argument to whole seconds, refusing to silently truncate a fractional
     # one (e.g. +0.5.seconds+ would otherwise become 0)

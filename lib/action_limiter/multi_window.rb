@@ -41,7 +41,8 @@ module ActionLimiter
         duration: T.any(Integer, ActiveSupport::Duration),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         redis: Redis,
-        retry_options: T::Hash[Symbol, T.untyped]
+        retry_options: T::Hash[Symbol, T.untyped],
+        transform: KeyTransform
       ).void
     end
     def initialize( # rubocop:disable Metrics/ParameterLists
@@ -50,7 +51,8 @@ module ActionLimiter
       duration:,
       wait_timeout: ActionLimiter.default_wait_timeout,
       redis: ActionLimiter.redis,
-      retry_options: {}
+      retry_options: {},
+      transform: nil
     )
       duration_seconds = whole_seconds(:duration, duration)
 
@@ -58,8 +60,9 @@ module ActionLimiter
       raise ArgumentError, 'expected limit to be positive' if limit <= 0
       raise ArgumentError, 'expected duration to be positive' if duration_seconds <= 0
 
-      super(wait_timeout:, redis:, retry_options:)
+      super(wait_timeout:, redis:, retry_options:, transform:)
       @keys = keys
+      @redis_keys = T.let(keys.map { |key| redis_key(key) }, T::Array[String])
       @limit = limit
       @duration = T.let(duration_seconds, Integer)
     end
@@ -85,7 +88,7 @@ module ActionLimiter
 
     T::Sig::WithoutRuntime.sig { returns(T.nilable(Integer)) }
     def try_acquire
-      result = Integer(SCRIPT.call(redis, keys:, argv: [now_ms, duration * 1000, limit, SecureRandom.uuid]))
+      result = Integer(SCRIPT.call(redis, keys: @redis_keys, argv: [now_ms, duration * 1000, limit, SecureRandom.uuid]))
       result.positive? ? nil : -result
     end
   end

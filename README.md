@@ -27,6 +27,13 @@ Limiters are thread-safe; create global ones once at boot and parametric ones (p
 Limiters capture `ActionLimiter.redis` when they are constructed, so configure `ActionLimiter.redis` before defining
 limiter constants.
 
+Pass `transform:` to keep raw keys (emails, IP addresses) out of Redis. A Symbol or String names an
+`OpenSSL::Digest` algorithm, an `OpenSSL::Digest` instance uses its algorithm, and a Proc maps the key itself:
+
+```ruby
+ActionLimiter::Window.new("login:#{params[:email]}", limit: 5, duration: 1.minute, transform: :sha256)
+```
+
 Durations (`wait_timeout:`, `duration:`, `interval:`, `lock_timeout:`, `ttl:`) take an Integer or an
 `ActiveSupport::Duration` of whole seconds; a fractional value such as `0.5.seconds` raises `ArgumentError`.
 
@@ -62,7 +69,8 @@ PAYMENTS.within_limit { payment_client.call }
 limiter = ActionLimiter::MultiBucket.new(
   ["login:email:#{params[:email]}", "login:ip:#{request.remote_ip}"],
   limit: 5,
-  interval: 1.minute
+  interval: 1.minute,
+  transform: :sha256
 )
 limiter.within_limit { authenticate(params[:email], params[:password]) }
 ```

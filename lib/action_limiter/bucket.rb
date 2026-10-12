@@ -38,7 +38,8 @@ module ActionLimiter
         interval: T.any(Integer, ActiveSupport::Duration),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         redis: Redis,
-        retry_options: T::Hash[Symbol, T.untyped]
+        retry_options: T::Hash[Symbol, T.untyped],
+        transform: KeyTransform
       ).void
     end
     def initialize( # rubocop:disable Metrics/ParameterLists
@@ -47,15 +48,17 @@ module ActionLimiter
       interval:,
       wait_timeout: ActionLimiter.default_wait_timeout,
       redis: ActionLimiter.redis,
-      retry_options: {}
+      retry_options: {},
+      transform: nil
     )
       interval_seconds = whole_seconds(:interval, interval)
 
       raise ArgumentError, 'expected limit to be positive' if limit <= 0
       raise ArgumentError, 'expected interval to be positive' if interval_seconds <= 0
 
-      super(wait_timeout:, redis:, retry_options:)
+      super(wait_timeout:, redis:, retry_options:, transform:)
       @key = key
+      @redis_key = T.let(redis_key(key), String)
       @limit = limit
       @interval = T.let(interval_seconds, Integer)
     end
@@ -86,7 +89,7 @@ module ActionLimiter
       bucket_id = now / interval_ms
       argv = [now, interval_ms, limit, (bucket_id + 1) * interval_ms]
 
-      result = Integer(SCRIPT.call(redis, keys: ["#{key}:#{bucket_id}"], argv:))
+      result = Integer(SCRIPT.call(redis, keys: ["#{@redis_key}:#{bucket_id}"], argv:))
       result.positive? ? nil : -result
     end
   end

@@ -89,7 +89,8 @@ module ActionLimiter
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         ttl: T.any(Integer, ActiveSupport::Duration),
         redis: Redis,
-        retry_options: T::Hash[Symbol, T.untyped]
+        retry_options: T::Hash[Symbol, T.untyped],
+        transform: KeyTransform
       ).void
     end
     def initialize( # rubocop:disable Metrics/ParameterLists
@@ -99,7 +100,8 @@ module ActionLimiter
       wait_timeout: ActionLimiter.default_wait_timeout,
       ttl: ActionLimiter.default_concurrent_lock_ttl,
       redis: ActionLimiter.redis,
-      retry_options: {}
+      retry_options: {},
+      transform: nil
     )
       lock_seconds = whole_seconds(:lock_timeout, lock_timeout)
       ttl_seconds = whole_seconds(:ttl, ttl)
@@ -107,11 +109,12 @@ module ActionLimiter
       raise ArgumentError, 'expected limit to be positive' if limit <= 0
       raise ArgumentError, 'expected lock_timeout to be positive' if lock_seconds <= 0
 
-      super(wait_timeout:, redis:, retry_options:)
+      super(wait_timeout:, redis:, retry_options:, transform:)
       @key = key
       @limit = limit
       @lock_timeout = T.let(lock_seconds, Integer)
-      @keys = T.let(["#{key}:tokens", "#{key}:held", "#{key}:pending"], T::Array[String])
+      base_key = redis_key(key)
+      @keys = T.let(["#{base_key}:tokens", "#{base_key}:held", "#{base_key}:pending"], T::Array[String])
       @key_ttl = T.let(@lock_timeout + self.wait_timeout + ttl_seconds, Integer)
 
       INIT_SCRIPT.call(redis, keys: @keys, argv: [limit, now_ms, @key_ttl])

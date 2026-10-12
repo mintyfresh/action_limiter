@@ -67,7 +67,8 @@ module ActionLimiter
         default_estimate: T.nilable(Numeric),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         redis: Redis,
-        retry_options: T::Hash[Symbol, T.untyped]
+        retry_options: T::Hash[Symbol, T.untyped],
+        transform: KeyTransform
       ).void
     end
     def initialize( # rubocop:disable Metrics/ParameterLists
@@ -77,13 +78,15 @@ module ActionLimiter
       default_estimate: nil,
       wait_timeout: ActionLimiter.default_wait_timeout,
       redis: ActionLimiter.redis,
-      retry_options: {}
+      retry_options: {},
+      transform: nil
     )
       raise ArgumentError, 'expected capacity to be positive' if capacity <= 0
       raise ArgumentError, 'expected restore_rate to be positive' unless restore_rate.positive?
 
-      super(wait_timeout:, redis:, retry_options:)
+      super(wait_timeout:, redis:, retry_options:, transform:)
       @key = key
+      @redis_key = T.let(redis_key(key), String)
       @capacity = capacity
       @restore_rate = T.let(restore_rate.to_f, Float)
       @default_estimate = default_estimate
@@ -116,14 +119,20 @@ module ActionLimiter
     # +Handle#points_used+.
     T::Sig::WithoutRuntime.sig { params(delta: Numeric).void }
     def adjust(delta)
-      ADJUST_SCRIPT.call(redis, keys: [key], argv: [now_ms, capacity, restore_rate, delta])
+      ADJUST_SCRIPT.call(redis, keys: [@redis_key], argv: [now_ms, capacity, restore_rate, delta])
     end
 
   private
 
     T::Sig::WithoutRuntime.sig { params(estimate: Numeric).returns(T.nilable(Integer)) }
     def try_acquire(estimate)
-      wait_ms = Integer(ACQUIRE_SCRIPT.call(redis, keys: [key], argv: [now_ms, capacity, restore_rate, estimate]))
+      wait_ms = Integer(
+        ACQUIRE_SCRIPT.call(
+          redis,
+          keys: [@redis_key],
+          argv: [now_ms, capacity, restore_rate, estimate]
+        )
+      )
       wait_ms.zero? ? nil : wait_ms
     end
 
