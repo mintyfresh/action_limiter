@@ -35,7 +35,7 @@ module ActionLimiter
     end
 
     it 'has a version' do
-      assert_equal '0.1.0', ActionLimiter::VERSION
+      assert_equal '0.1.1', ActionLimiter::VERSION
     end
   end
 end
