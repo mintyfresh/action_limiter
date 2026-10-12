@@ -16,8 +16,11 @@ require 'action_limiter/version'
 module ActionLimiter
   autoload :Limiter, 'action_limiter/limiter'
   autoload :LockLost, 'action_limiter/lock_lost'
+  autoload :MultiWindow, 'action_limiter/multi_window'
   autoload :OverLimit, 'action_limiter/over_limit'
   autoload :RedisLimiter, 'action_limiter/redis_limiter'
+  autoload :Script, 'action_limiter/script'
+  autoload :Window, 'action_limiter/window'
 
   @default_over_limit_retry_attempts = T.let(20, Integer)
   @default_wait_timeout = T.let(0, Integer)
