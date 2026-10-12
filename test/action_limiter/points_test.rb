@@ -35,6 +35,11 @@ module ActionLimiter
       assert_in_delta 6, balance, 0.5
     end
 
+    it 'validates the default estimate at construction' do
+      assert_raises(ArgumentError) { Points.new(key, capacity: 10, restore_rate: 1, default_estimate: 0) }
+      assert_raises(ArgumentError) { Points.new(key, capacity: 10, restore_rate: 1, default_estimate: 11) }
+    end
+
     it 'prefers an explicit estimate over the default' do
       limiter = Points.new(key, capacity: 10, restore_rate: 1, default_estimate: 4)
       limiter.within_limit(estimate: 2) { nil }

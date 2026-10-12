@@ -83,6 +83,19 @@ module ActionLimiter
       end
     end
 
+    class MetalController < ::ActionController::Metal
+      include ::AbstractController::Callbacks
+      include ActionLimiter::ActionController::RateLimits
+
+      rate_limit do
+        ActionLimiter::Window.new("#{PREFIX}:metal", limit: 1, duration: 10)
+      end
+
+      def limited
+        self.response_body = 'ok'
+      end
+    end
+
     class DeclarationController < ::ActionController::API
       include ActionLimiter::ActionController::RateLimits
     end
@@ -180,6 +193,12 @@ module ActionLimiter
 
       assert_equal 429, status
       assert_equal "Rate limit exceeded for #{PREFIX}:custom", body.body
+    end
+
+    it 'limits a Metal controller that includes callbacks' do
+      dispatch(MetalController, :limited)
+
+      assert_raises(::ActionController::TooManyRequests) { dispatch(MetalController, :limited) }
     end
 
     it 'rejects invalid declarations' do

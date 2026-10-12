@@ -26,6 +26,7 @@ module ActionLimiter
       extend ActiveSupport::Concern
 
       requires_ancestor { ::ActionController::Metal }
+      requires_ancestor { ::AbstractController::Callbacks }
 
       include Kernel
 
@@ -49,7 +50,7 @@ module ActionLimiter
           raise ArgumentError, 'expected with: or a block' if with.nil? && block.nil?
 
           source = with || block
-          T.bind(self, T.any(T.class_of(::ActionController::Base), T.class_of(::ActionController::API)))
+          T.bind(self, T.all(T.class_of(::ActionController::Metal), ::AbstractController::Callbacks::ClassMethods))
 
           around_action(**filters) do |controller, action|
             controller.send(:within_rate_limit, source, &action)

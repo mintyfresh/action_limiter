@@ -87,6 +87,7 @@ module ActionLimiter
       @capacity = capacity
       @restore_rate = T.let(restore_rate.to_f, Float)
       @default_estimate = default_estimate
+      validate_estimate!(default_estimate) unless default_estimate.nil?
     end
 
     sig { override.returns(String) }
