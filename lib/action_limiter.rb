@@ -15,6 +15,7 @@ require 'action_limiter/version'
 
 module ActionLimiter
   autoload :Bucket, 'action_limiter/bucket'
+  autoload :Concurrent, 'action_limiter/concurrent'
   autoload :Limiter, 'action_limiter/limiter'
   autoload :LockLost, 'action_limiter/lock_lost'
   autoload :MultiWindow, 'action_limiter/multi_window'
