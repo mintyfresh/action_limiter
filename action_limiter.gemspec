@@ -20,6 +20,6 @@ Gem::Specification.new do |spec|
   spec.require_paths = ['lib']
 
   spec.add_dependency 'activesupport', '>= 8'
-  spec.add_dependency 'redis'
+  spec.add_dependency 'redis', '>= 5'
   spec.add_dependency 'sorbet-runtime'
 end
