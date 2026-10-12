@@ -9,7 +9,12 @@ module ActionLimiter
     class FakeLimiter < RedisLimiter
       extend T::Sig
 
-      sig { params(results: T::Array[T.nilable(Integer)], wait_timeout: Integer).void }
+      sig do
+        params(
+          results: T::Array[T.nilable(Integer)],
+          wait_timeout: T.any(Integer, ::ActiveSupport::Duration)
+        ).void
+      end
       def initialize(results, wait_timeout: 0)
         super(wait_timeout:, redis: ActionLimiter.redis, retry_options: { queue: 'slow' })
         @results = results
@@ -80,6 +85,15 @@ module ActionLimiter
 
     it 'rejects a negative wait_timeout' do
       assert_raises(ArgumentError) { FakeLimiter.new([nil], wait_timeout: -1) }
+    end
+
+    it 'rejects a sub-second wait_timeout instead of truncating it' do
+      error = assert_raises(ArgumentError) { FakeLimiter.new([nil], wait_timeout: 0.5.seconds) }
+      assert_equal 'expected wait_timeout to be a whole number of seconds', error.message
+    end
+
+    it 'accepts a whole-second Duration wait_timeout' do
+      assert_equal 2, FakeLimiter.new([nil], wait_timeout: 2.seconds).wait_timeout
     end
 
     it 'builds a LockLost error naming the limiter' do

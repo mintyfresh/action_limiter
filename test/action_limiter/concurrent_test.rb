@@ -245,5 +245,13 @@ module ActionLimiter
       assert_raises(ArgumentError) { Concurrent.new(key, limit: 1, lock_timeout: 0) }
       assert_raises(ArgumentError) { Concurrent.new(key, limit: 1, lock_timeout: 10, wait_timeout: -1) }
     end
+
+    it 'rejects sub-second lock_timeout and ttl instead of truncating them' do
+      error = assert_raises(ArgumentError) { Concurrent.new(key, limit: 1, lock_timeout: 2.5.seconds) }
+      assert_equal 'expected lock_timeout to be a whole number of seconds', error.message
+
+      error = assert_raises(ArgumentError) { Concurrent.new(key, limit: 1, lock_timeout: 10, ttl: 0.5.seconds) }
+      assert_equal 'expected ttl to be a whole number of seconds', error.message
+    end
   end
 end

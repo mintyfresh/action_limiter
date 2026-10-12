@@ -101,15 +101,18 @@ module ActionLimiter
       redis: ActionLimiter.redis,
       retry_options: {}
     )
+      lock_seconds = whole_seconds(:lock_timeout, lock_timeout)
+      ttl_seconds = whole_seconds(:ttl, ttl)
+
       raise ArgumentError, 'expected limit to be positive' if limit <= 0
-      raise ArgumentError, 'expected lock_timeout to be positive' if lock_timeout.to_i <= 0
+      raise ArgumentError, 'expected lock_timeout to be positive' if lock_seconds <= 0
 
       super(wait_timeout:, redis:, retry_options:)
       @key = key
       @limit = limit
-      @lock_timeout = T.let(lock_timeout.to_i, Integer)
+      @lock_timeout = T.let(lock_seconds, Integer)
       @keys = T.let(["#{key}:tokens", "#{key}:held", "#{key}:pending"], T::Array[String])
-      @key_ttl = T.let(@lock_timeout + self.wait_timeout + ttl.to_i, Integer)
+      @key_ttl = T.let(@lock_timeout + self.wait_timeout + ttl_seconds, Integer)
 
       INIT_SCRIPT.call(redis, keys: @keys, argv: [limit, now_ms, @key_ttl])
     end

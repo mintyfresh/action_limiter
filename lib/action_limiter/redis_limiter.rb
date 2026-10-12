@@ -29,14 +29,24 @@ module ActionLimiter
       ).void
     end
     def initialize(wait_timeout:, redis:, retry_options:)
-      raise ArgumentError, 'expected wait_timeout to be non-negative' if wait_timeout.to_i.negative?
+      wait_seconds = whole_seconds(:wait_timeout, wait_timeout)
+      raise ArgumentError, 'expected wait_timeout to be non-negative' if wait_seconds.negative?
 
       super(retry_options:)
-      @wait_timeout = T.let(wait_timeout.to_i, Integer)
+      @wait_timeout = T.let(wait_seconds, Integer)
       @redis = redis
     end
 
   private
+
+    # Converts a duration argument to whole seconds, refusing to silently truncate a fractional
+    # one (e.g. +0.5.seconds+ would otherwise become 0)
+    sig { params(name: Symbol, value: T.any(Integer, ActiveSupport::Duration)).returns(Integer) }
+    def whole_seconds(name, value)
+      raise ArgumentError, "expected #{name} to be a whole number of seconds" unless (value.to_f % 1).zero?
+
+      value.to_i
+    end
 
     # Repeatedly attempts acquisition until it succeeds or +wait_timeout+ elapses. The block
     # returns nil on success, or the number of milliseconds until an attempt could succeed.

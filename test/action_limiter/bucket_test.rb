@@ -76,5 +76,10 @@ module ActionLimiter
       assert_raises(ArgumentError) { Bucket.new(key, limit: 1, interval: 0) }
       assert_raises(ArgumentError) { Bucket.new(key, limit: 1, interval: 1, wait_timeout: -1) }
     end
+
+    it 'rejects a sub-second interval instead of truncating it' do
+      error = assert_raises(ArgumentError) { Bucket.new(key, limit: 1, interval: 0.25.seconds) }
+      assert_equal 'expected interval to be a whole number of seconds', error.message
+    end
   end
 end

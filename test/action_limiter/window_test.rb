@@ -87,6 +87,11 @@ module ActionLimiter
       assert_raises(ArgumentError) { Window.new(key, limit: 1, duration: 10, wait_timeout: -1) }
     end
 
+    it 'rejects a sub-second duration instead of truncating it' do
+      error = assert_raises(ArgumentError) { Window.new(key, limit: 1, duration: 1.5.seconds) }
+      assert_equal 'expected duration to be a whole number of seconds', error.message
+    end
+
     it 'instruments acquire' do
       events = capture_events('acquire.action_limiter') { Window.new(key, limit: 1, duration: 10).within_limit { nil } }
       assert_equal 1, events.size

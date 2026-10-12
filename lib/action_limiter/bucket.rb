@@ -49,13 +49,15 @@ module ActionLimiter
       redis: ActionLimiter.redis,
       retry_options: {}
     )
+      interval_seconds = whole_seconds(:interval, interval)
+
       raise ArgumentError, 'expected limit to be positive' if limit <= 0
-      raise ArgumentError, 'expected interval to be positive' if interval.to_i <= 0
+      raise ArgumentError, 'expected interval to be positive' if interval_seconds <= 0
 
       super(wait_timeout:, redis:, retry_options:)
       @key = key
       @limit = limit
-      @interval = T.let(interval.to_i, Integer)
+      @interval = T.let(interval_seconds, Integer)
     end
 
     sig { override.returns(String) }

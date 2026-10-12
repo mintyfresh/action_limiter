@@ -57,5 +57,10 @@ module ActionLimiter
       assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 1, duration: 0) }
       assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 1, duration: 10, wait_timeout: -1) }
     end
+
+    it 'rejects a sub-second duration instead of truncating it' do
+      error = assert_raises(ArgumentError) { MultiWindow.new([user_key], limit: 1, duration: 0.5.seconds) }
+      assert_equal 'expected duration to be a whole number of seconds', error.message
+    end
   end
 end
