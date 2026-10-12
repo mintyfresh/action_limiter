@@ -56,6 +56,17 @@ PAYMENTS = ActionLimiter::Bucket.new('payment-api', limit: 30, interval: 1.secon
 PAYMENTS.within_limit { payment_client.call }
 ```
 
+### MultiBucket: one action, several buckets, checked atomically
+
+```ruby
+limiter = ActionLimiter::MultiBucket.new(
+  ["login:email:#{params[:email]}", "login:ip:#{request.remote_ip}"],
+  limit: 5,
+  interval: 1.minute
+)
+limiter.within_limit { authenticate(params[:email], params[:password]) }
+```
+
 ### Concurrent: at most N at once
 
 ```ruby

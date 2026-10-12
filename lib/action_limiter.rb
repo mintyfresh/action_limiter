@@ -21,6 +21,7 @@ module ActionLimiter
   autoload :GraphQL, 'action_limiter/graphql'
   autoload :Limiter, 'action_limiter/limiter'
   autoload :LockLost, 'action_limiter/lock_lost'
+  autoload :MultiBucket, 'action_limiter/multi_bucket'
   autoload :MultiWindow, 'action_limiter/multi_window'
   autoload :OverLimit, 'action_limiter/over_limit'
   autoload :Points, 'action_limiter/points'
