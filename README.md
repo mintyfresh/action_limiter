@@ -21,8 +21,14 @@ ActionLimiter.default_concurrent_lock_ttl = 10   # extra seconds Concurrent keys
 ActionLimiter.default_over_limit_retry_attempts = 20
 ```
 
-Every limiter also accepts `redis:` (a Redis instance), `wait_timeout:`, and `retry_options:` keywords. Limiters are
-thread-safe; create global ones once at boot and parametric ones (per user, per account) on demand.
+Every Redis-backed limiter also accepts `redis:` (a Redis instance), `wait_timeout:`, and `retry_options:` keywords.
+Limiters are thread-safe; create global ones once at boot and parametric ones (per user, per account) on demand.
+
+Limiters capture `ActionLimiter.redis` when they are constructed, so configure `ActionLimiter.redis` before defining
+limiter constants.
+
+Durations (`wait_timeout:`, `duration:`, `interval:`, `lock_timeout:`, `ttl:`) take an Integer or an
+`ActiveSupport::Duration` of whole seconds; a fractional value such as `0.5.seconds` raises `ArgumentError`.
 
 When a limit can't be met within `wait_timeout`, `ActionLimiter::OverLimit` is raised. It
 exposes `limiter`, `retry_after` (Float seconds), and `retry_options`.
@@ -99,10 +105,13 @@ end
 ```
 
 `OverLimit` is rescued, and the job is rescheduled after
-`retry_after + executions * 5.minutes + jitter`, up to 20 times. Override
+`retry_after + executions * 5.minutes + jitter`, until the job has executed 20 times. Override
 `calculate_over_limit_retry_delay(error)` or `over_limit_retry_attempts` to change this. Set
 `retry_options` on a limiter for per-limiter `attempts:` (or `:unlimited`), `report:`, `queue:`,
 and `priority:`.
+
+When the attempts run out, ActiveJob emits `retry_stopped.active_job` (payload `job`, `error`),
+runs the job's `after_discard` callbacks, and re-raises the `OverLimit`.
 
 ## GraphQL
 
@@ -129,9 +138,9 @@ Over the limit, the field returns a `GraphQL::ExecutionError` with `extensions: 
 
 ## Clocks
 
-Limiters use the calling process's wall clock. Keep machines in sync with NTP. Clock skew between
-hosts beyond a few seconds can briefly over- or under-admit Concurrent waiters, so keep hosts
-NTP-synced.
+Limiters use the calling process's wall clock. Clock skew between hosts beyond a few seconds can
+briefly over-admit Concurrent waiters until the surplus token is trimmed on the next acquire.
+Keep hosts NTP-synced.
 
 ## Development
 
