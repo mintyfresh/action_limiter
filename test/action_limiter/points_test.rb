@@ -124,6 +124,24 @@ module ActionLimiter
       assert_operator acquire.call(t, 9), :>, 0
     end
 
+    it 'keeps the key alive for the full refill from a stored timestamp ahead of the caller' do
+      t = now_ms
+      # A caller whose clock ran 10s ahead stored a full bucket
+      redis.hset(key, 'points', '10', 'updated_at_ms', t + 10_000)
+
+      assert_equal 0, Integer(Points::ACQUIRE_SCRIPT.call(redis, keys: [key], argv: [t, 10, 1.0, 10]))
+      # Refill completes 10s after the stored timestamp, which is itself 10s ahead
+      assert_operator redis.pttl(key), :>, 20_000
+    end
+
+    it 'keeps the key alive for the full refill after an adjustment behind the stored timestamp' do
+      t = now_ms
+      redis.hset(key, 'points', '5', 'updated_at_ms', t + 10_000)
+
+      Points::ADJUST_SCRIPT.call(redis, keys: [key], argv: [t, 10, 1.0, -5])
+      assert_operator redis.pttl(key), :>, 20_000
+    end
+
     it 'validates its arguments' do
       assert_raises(ArgumentError) { Points.new(key, capacity: 0, restore_rate: 1) }
       assert_raises(ArgumentError) { Points.new(key, capacity: 1, restore_rate: 0) }
