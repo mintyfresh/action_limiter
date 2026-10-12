@@ -112,6 +112,18 @@ module ActionLimiter
       assert_equal 0, redis.exists(key)
     end
 
+    it 'never moves the timestamp backwards when a caller clock lags' do
+      t = now_ms
+      acquire = lambda do |at, estimate|
+        Integer(Points::ACQUIRE_SCRIPT.call(redis, keys: [key], argv: [at, 10, 10.0, estimate]))
+      end
+
+      assert_equal 0, acquire.call(t, 5)
+      assert_equal 0, acquire.call(t - 500, 1)
+      assert_operator redis.hget(key, 'updated_at_ms').to_i, :>=, t
+      assert_operator acquire.call(t, 9), :>, 0
+    end
+
     it 'validates its arguments' do
       assert_raises(ArgumentError) { Points.new(key, capacity: 0, restore_rate: 1) }
       assert_raises(ArgumentError) { Points.new(key, capacity: 1, restore_rate: 0) }

@@ -10,8 +10,9 @@ local state      = redis.call('HMGET', key, 'points', 'updated_at_ms')
 local points     = tonumber(state[1]) or capacity
 local updated_at = tonumber(state[2]) or now_ms
 local elapsed    = math.max(0, now_ms - updated_at)
+-- Never move the timestamp backwards, so a lagging client clock cannot credit refill twice
 local available  = math.min(capacity, points + elapsed * rate / 1000)
 
 local balance = math.min(capacity, available + delta)
-redis.call('HSET', key, 'points', tostring(balance), 'updated_at_ms', now_ms)
+redis.call('HSET', key, 'points', tostring(balance), 'updated_at_ms', math.max(now_ms, updated_at))
 redis.call('PEXPIRE', key, math.ceil((capacity - balance) / rate * 1000) + 1000)
