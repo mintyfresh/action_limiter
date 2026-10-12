@@ -56,11 +56,15 @@ module ActionLimiter
     T::Sig::WithoutRuntime.sig { returns(Float) }
     attr_reader :restore_rate
 
+    T::Sig::WithoutRuntime.sig { returns(T.nilable(Numeric)) }
+    attr_reader :default_estimate
+
     sig do
       params(
         key: String,
         capacity: Integer,
         restore_rate: Numeric,
+        default_estimate: T.nilable(Numeric),
         wait_timeout: T.any(Integer, ActiveSupport::Duration),
         redis: Redis,
         retry_options: T::Hash[Symbol, T.untyped]
@@ -70,6 +74,7 @@ module ActionLimiter
       key,
       capacity:,
       restore_rate:,
+      default_estimate: nil,
       wait_timeout: ActionLimiter.default_wait_timeout,
       redis: ActionLimiter.redis,
       retry_options: {}
@@ -81,6 +86,7 @@ module ActionLimiter
       @key = key
       @capacity = capacity
       @restore_rate = T.let(restore_rate.to_f, Float)
+      @default_estimate = default_estimate
     end
 
     sig { override.returns(String) }
@@ -95,7 +101,9 @@ module ActionLimiter
         .returns(T.type_parameter(:Result))
     end
     def within_limit(**options, &block)
-      estimate = options.fetch(:estimate) { raise ArgumentError, 'missing keyword: :estimate' }
+      estimate = options.fetch(:estimate, default_estimate)
+      raise ArgumentError, 'missing keyword: :estimate' if estimate.nil?
+
       reject_options!(options.except(:estimate))
       validate_estimate!(estimate)
 

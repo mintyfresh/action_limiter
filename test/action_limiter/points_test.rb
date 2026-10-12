@@ -28,6 +28,20 @@ module ActionLimiter
       assert_in_delta 70, balance, 0.5
     end
 
+    it 'charges the default estimate when none is given' do
+      limiter = Points.new(key, capacity: 10, restore_rate: 1, default_estimate: 4)
+
+      assert_equal :result, limiter.within_limit { :result }
+      assert_in_delta 6, balance, 0.5
+    end
+
+    it 'prefers an explicit estimate over the default' do
+      limiter = Points.new(key, capacity: 10, restore_rate: 1, default_estimate: 4)
+      limiter.within_limit(estimate: 2) { nil }
+
+      assert_in_delta 8, balance, 0.5
+    end
+
     it 'yields a handle' do
       limiter = Points.new(key, capacity: 100, restore_rate: 1)
 
