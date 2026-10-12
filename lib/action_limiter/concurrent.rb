@@ -210,7 +210,7 @@ module ActionLimiter
     # swallowed. The lock then expires through +lock_timeout+.
     T::Sig::WithoutRuntime.sig { params(acquisition_id: String).void }
     def release(acquisition_id)
-      RELEASE_SCRIPT.call(redis, keys: @keys, argv: [acquisition_id, @key_ttl])
+      RELEASE_SCRIPT.call(redis, keys: @keys, argv: [acquisition_id, @key_ttl, limit])
     rescue Redis::BaseError => error
       instrument(:release_failed, error:)
     end

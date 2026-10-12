@@ -29,6 +29,15 @@ end
 -- Waiters whose pending entry expired either gave up or crashed
 redis.call('ZREMRANGEBYSCORE', pending_key, '-inf', now_ms)
 
+-- Trim surplus tokens (a lowered limit, or a token minted for a waiter whose pending entry
+-- expired mid-flight). Pending is excluded: a token in flight between BRPOP and BRPOP_ACQUIRE
+-- is in neither the list nor the held set, so this sum never over-counts and never over-trims.
+-- Reclaiming expired holds below moves entries from held to the list, so it needs no re-trim.
+local surplus = redis.call('LLEN', tokens_key) + redis.call('ZCARD', held_key) - limit
+for i = 1, surplus do
+  if not redis.call('LPOP', tokens_key) then break end
+end
+
 -- Self-healing: restore a token lost to a crash between BRPOP and BRPOP_ACQUIRE. A live
 -- waiter between those two steps still has a pending entry, so its in-flight token is
 -- counted here and never duplicated.

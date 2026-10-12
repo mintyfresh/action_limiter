@@ -32,6 +32,29 @@ module ActionLimiter
       redis.zadd(held_key, expiry_ms, 'other-process')
     end
 
+    # Runs +threads+ x +iterations+ holds of +hold+ seconds each and returns the most holders
+    # observed at once
+    sig { params(limiter: Concurrent, threads: Integer, iterations: Integer, hold: Float).returns(Integer) }
+    def peak_concurrency(limiter, threads:, iterations:, hold:)
+      mutex = ::Thread::Mutex.new
+      current = 0
+      peak = 0
+
+      workers = Array.new(threads) do
+        Thread.new do
+          iterations.times do
+            limiter.within_limit do
+              mutex.synchronize { peak = [peak, current += 1].max }
+              sleep(hold)
+              mutex.synchronize { current -= 1 }
+            end
+          end
+        end
+      end
+      workers.each(&:join)
+      peak
+    end
+
     it 'returns the block result when under the limit' do
       limiter = Concurrent.new(key, limit: 3, lock_timeout: 10)
       assert_equal :result, limiter.within_limit { :result }
@@ -158,6 +181,50 @@ module ActionLimiter
       redis.zadd(pending_key, now_ms - 1, 'crashed-waiter')
 
       assert_equal :healed, limiter.within_limit { :healed }
+      assert_equal 0, redis.zcard(pending_key)
+    end
+
+    it 'trims surplus tokens when the limit is lowered' do
+      Concurrent.new(key, limit: 5, lock_timeout: 10)
+      limiter = Concurrent.new(key, limit: 2, lock_timeout: 10, wait_timeout: 5)
+      assert_equal 2, redis.llen(tokens_key)
+
+      assert_operator peak_concurrency(limiter, threads: 5, iterations: 1, hold: 0.1), :<=, 2
+    end
+
+    it 'trims a surplus token found in the pool on acquire' do
+      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
+      redis.rpush(tokens_key, '1')
+
+      limiter.within_limit { nil }
+      assert_equal 1, redis.llen(tokens_key)
+    end
+
+    it 'reclaims a token minted for an in-flight waiter whose pending entry expired' do
+      limiter = Concurrent.new(key, limit: 1, lock_timeout: 10)
+      # The waiter popped the only token, then its pending entry was pruned (clock skew)
+      redis.lpop(tokens_key)
+      redis.zadd(pending_key, now_ms - 1, 'waiter')
+
+      limiter.within_limit do
+        Concurrent::BRPOP_ACQUIRE_SCRIPT.call(
+          redis, keys: [tokens_key, held_key, pending_key], argv: [now_ms, 10_000, 'waiter', 30]
+        )
+        assert_equal 2, redis.zcard(held_key)
+      end
+      assert_equal 0, redis.llen(tokens_key)
+
+      limiter.send(:release, 'waiter')
+      assert_equal 1, redis.llen(tokens_key)
+      assert_equal 0, redis.zcard(held_key)
+    end
+
+    it 'never exceeds the limit under contention and settles back to the limit' do
+      limiter = Concurrent.new(key, limit: 3, lock_timeout: 10, wait_timeout: 5)
+
+      assert_operator peak_concurrency(limiter, threads: 20, iterations: 5, hold: 0.01), :<=, 3
+      assert_equal 3, redis.llen(tokens_key)
+      assert_equal 0, redis.zcard(held_key)
       assert_equal 0, redis.zcard(pending_key)
     end
 
