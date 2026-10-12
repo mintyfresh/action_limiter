@@ -23,6 +23,7 @@ module ActionLimiter
   autoload :Points, 'action_limiter/points'
   autoload :RedisLimiter, 'action_limiter/redis_limiter'
   autoload :Script, 'action_limiter/script'
+  autoload :Unlimited, 'action_limiter/unlimited'
   autoload :Window, 'action_limiter/window'
 
   @default_over_limit_retry_attempts = T.let(20, Integer)
