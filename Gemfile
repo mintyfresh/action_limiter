@@ -8,6 +8,7 @@ gem 'actionpack'
 gem 'activejob'
 gem 'graphql'
 gem 'minitest'
+gem 'railties'
 gem 'rake'
 gem 'rubocop', require: false
 gem 'rubocop-minitest', require: false

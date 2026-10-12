@@ -21,6 +21,14 @@ ActionLimiter.default_concurrent_lock_ttl = 10   # extra seconds Concurrent keys
 ActionLimiter.default_over_limit_retry_attempts = 20
 ```
 
+In a Rails application, the same settings can be set through `config.action_limiter`:
+
+```ruby
+# config/application.rb
+config.action_limiter.redis = ENV.fetch('REDIS_URL')
+config.action_limiter.default_wait_timeout = 5
+```
+
 Every Redis-backed limiter also accepts `redis:` (a Redis instance), `wait_timeout:`, and `retry_options:` keywords.
 Limiters are thread-safe; create global ones once at boot and parametric ones (per user, per account) on demand.
 

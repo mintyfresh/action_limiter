@@ -69,3 +69,5 @@ module ActionLimiter
     end
   end
 end
+
+require 'action_limiter/railtie' if defined?(Rails::Railtie)

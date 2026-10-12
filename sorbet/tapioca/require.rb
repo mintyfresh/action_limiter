@@ -4,3 +4,4 @@
 # Add your extra requires here (`bin/tapioca require` can be used to bootstrap this list)
 
 require 'action_controller'
+require 'rails'
